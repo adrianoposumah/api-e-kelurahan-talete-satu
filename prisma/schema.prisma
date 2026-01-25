@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enum definitions
+enum UserRole {
+  warga
+  kepling
+  lurah
+  admin
+}
+
+enum UserStatus {
+  active
+  inactive
+  banned
+}
+
+enum JenisKelamin {
+  L
+  P
+}
+
+enum GolonganDarah {
+  A
+  B
+  AB
+  O
+  TIDAK_DIKETAHUI @map("-")
+}
+
+enum StatusKawin {
+  BELUM_KAWIN  @map("Belum Kawin")
+  KAWIN        @map("Kawin")
+  CERAI_HIDUP  @map("Cerai Hidup")
+  CERAI_MATI   @map("Cerai Mati")
+}
+
+// Users table
+model User {
+  id          BigInt      @id @default(autoincrement()) @db.BigInt
+  nik         String?     @unique @db.Char(16)
+  nama        String      @db.VarChar(100)
+  noHp        String      @unique @map("no_hp") @db.VarChar(20)
+  role        UserRole    @default(warga)
+  password    String      @db.VarChar(255)
+  isValidate  Boolean     @default(false) @map("is_validate")
+  status      UserStatus  @default(active)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  tokens      UserToken[]
+  kependudukan DataKependudukan? @relation(fields: [nik], references: [nik])
+
+  @@map("users")
+}
+
+// User tokens table for refresh tokens
+model UserToken {
+  id           BigInt   @id @default(autoincrement()) @db.BigInt
+  userId       BigInt   @map("user_id") @db.BigInt
+  refreshToken String   @map("refresh_token") @db.Text
+  userAgent    String?  @map("user_agent") @db.VarChar(255)
+  ipAddress    String?  @map("ip_address") @db.VarChar(50)
+  expiredAt    DateTime @map("expired_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_tokens")
+}
+
+// Data kependudukan table
+model DataKependudukan {
+  nik             String       @id @db.Char(16)
+  nama            String       @db.VarChar(100)
+  tempatLahir     String       @map("tempat_lahir") @db.VarChar(100)
+  tanggalLahir    DateTime     @map("tanggal_lahir") @db.Date
+  jenisKelamin    JenisKelamin @map("jenis_kelamin")
+  golonganDarah   GolonganDarah? @map("golongan_darah")
+
+  alamat          String       @db.Text
+  rt              String?      @db.Char(3)
+  rw              String?      @db.Char(3)
+  kelurahan       String       @db.VarChar(100)
+  kecamatan       String       @db.VarChar(100)
+  kabupatenKota   String       @map("kabupaten_kota") @db.VarChar(100)
+  provinsi        String       @db.VarChar(100)
+
+  statusKawin     StatusKawin  @map("status_kawin")
+  agama           String       @db.VarChar(50)
+  pekerjaan       String       @db.VarChar(100)
+  kewarganegaraan String       @default("WNI") @db.VarChar(10)
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  user            User?
+
+  @@map("data_kependudukan")
+}
