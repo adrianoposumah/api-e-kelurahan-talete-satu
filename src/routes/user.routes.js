@@ -1,6 +1,7 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import prisma from '../config/prisma.js';
-import { authMiddleware, requireRole } from '../middleware/auth.middleware.js';
+import { authMiddleware } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -15,6 +16,29 @@ const formatUserResponse = (user) => ({
   status: user.status,
   created_at: user.createdAt,
   updated_at: user.updatedAt,
+  // Include kependudukan data if user is validated
+  kependudukan:
+    user.isValidate && user.kependudukan
+      ? {
+          nik: user.kependudukan.nik,
+          nama: user.kependudukan.nama,
+          tempat_lahir: user.kependudukan.tempatLahir,
+          tanggal_lahir: user.kependudukan.tanggalLahir,
+          jenis_kelamin: user.kependudukan.jenisKelamin,
+          golongan_darah: user.kependudukan.golonganDarah,
+          alamat: user.kependudukan.alamat,
+          rt: user.kependudukan.rt,
+          rw: user.kependudukan.rw,
+          kelurahan: user.kependudukan.kelurahan,
+          kecamatan: user.kependudukan.kecamatan,
+          kabupaten_kota: user.kependudukan.kabupatenKota,
+          provinsi: user.kependudukan.provinsi,
+          status_kawin: user.kependudukan.statusKawin,
+          agama: user.kependudukan.agama,
+          pekerjaan: user.kependudukan.pekerjaan,
+          kewarganegaraan: user.kependudukan.kewarganegaraan,
+        }
+      : undefined,
 });
 
 // GET /users/me - Get current user profile (protected)
@@ -22,6 +46,9 @@ router.get('/me', authMiddleware, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: BigInt(req.user.userId) },
+      include: {
+        kependudukan: true,
+      },
     });
 
     if (!user) {
@@ -40,11 +67,16 @@ router.get('/me', authMiddleware, async (req, res, next) => {
 // PATCH /users/me - Update current user profile (protected)
 router.patch('/me', authMiddleware, async (req, res, next) => {
   try {
-    const { nama } = req.body;
+    const { nama, no_hp, password } = req.body;
 
     // Build update data object with only provided fields
     const updateData = {};
     if (nama !== undefined) updateData.nama = nama;
+    if (no_hp !== undefined) updateData.noHp = no_hp;
+    if (password !== undefined) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
+    }
 
     // Check if there's anything to update
     if (Object.keys(updateData).length === 0) {
@@ -63,63 +95,6 @@ router.patch('/me', authMiddleware, async (req, res, next) => {
       message: 'Profil berhasil diupdate',
       user: formatUserResponse(user),
     });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /users - Get all users (admin only)
-router.get('/', authMiddleware, requireRole('admin'), async (req, res, next) => {
-  try {
-    const { page = 1, limit = 10, status, role } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Build filter
-    const where = {};
-    if (status) where.status = status;
-    if (role) where.role = role;
-
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.user.count({ where }),
-    ]);
-
-    res.json({
-      data: users.map(formatUserResponse),
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        total_pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /users/:id - Get user by ID (admin only)
-router.get('/:id', authMiddleware, requireRole('admin'), async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    const user = await prisma.user.findUnique({
-      where: { id: BigInt(id) },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'User tidak ditemukan',
-      });
-    }
-
-    res.json(formatUserResponse(user));
   } catch (error) {
     next(error);
   }

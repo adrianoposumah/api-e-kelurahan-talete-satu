@@ -1,5 +1,79 @@
 # Change Log
 
+## [2026-01-25] - Admin Routes Refactoring
+
+### Added
+
+- **Admin Routes (`src/routes/admin.routes.js`)**: Centralized admin-only routes
+  - All routes protected with `authMiddleware` and `requireRole('admin')`
+  - `GET /admin/users` - Get all users with pagination (moved from user.routes.js)
+  - `GET /admin/users/:id` - Get user by ID (moved from user.routes.js)
+  - `GET /admin/validate-requests` - Get all validation requests with pagination
+  - `GET /admin/validate-requests/:id` - Get validation request by ID
+  - `PATCH /admin/validate-requests/:id` - Process validation request (approve/reject)
+
+### Changed
+
+- **User Routes (`src/routes/user.routes.js`)**: Now only contains user-facing routes
+  - `GET /users/me` - Get current user profile
+  - `PATCH /users/me` - Update current user profile (nama, no_hp, password)
+
+- **Validate Routes (`src/routes/validate.routes.js`)**: Now only contains user-facing routes
+  - `POST /validate-requests` - Create validation request
+  - `GET /validate-requests/me` - Get current user's validation requests
+
+---
+
+## [2026-01-25] - Validation Request System
+
+### Added
+
+- **Validate Request Table (`validate_requests`)**: New table for user validation workflow
+  - `id` - Auto-increment primary key (BigInt)
+  - `user_id` - Foreign key to users (cascade delete)
+  - `nik` - NIK being validated (16 char, references data_kependudukan)
+  - `status` - Request status enum (pending, approved, rejected)
+  - `admin_notes` - Optional notes from admin (text)
+  - `processed_by` - Admin who processed the request (nullable, references users)
+  - `processed_at` - When the request was processed (nullable)
+  - `created_at`, `updated_at` - Timestamps
+
+- **Validate Request Routes (`src/routes/validate.routes.js`)**: Complete validation workflow
+  - `POST /validate-requests` - Create validation request (warga only)
+    - Validates NIK format (16 digits)
+    - Checks if NIK exists in data_kependudukan
+    - Checks if user is already validated
+    - Prevents duplicate pending requests
+    - Returns 201 with request data and kependudukan info
+  - `GET /validate-requests` - Get all validation requests with pagination (admin only)
+    - Optional filter by status (pending, approved, rejected)
+    - Includes user, kependudukan, and admin data
+  - `GET /validate-requests/me` - Get current user's validation requests
+  - `GET /validate-requests/:id` - Get validation request by ID (admin only)
+  - `PATCH /validate-requests/:id` - Process validation request (admin only)
+    - Accept status: "approved" or "rejected"
+    - Optional admin_notes
+    - If approved: updates user's NIK and is_validate to true
+    - Uses transaction for data consistency
+
+### Enums Added
+
+- `ValidateRequestStatus`: pending, approved, rejected
+
+### Relations Added
+
+- `User` → `ValidateRequest` (one-to-many as requester)
+- `User` → `ValidateRequest` (one-to-many as admin processor)
+- `DataKependudukan` → `ValidateRequest` (one-to-many)
+
+### Updated
+
+- **User Routes (`src/routes/user.routes.js`)**:
+  - `PATCH /users/me` now supports updating `nama`, `no_hp`, and `password`
+  - Password is automatically hashed with bcrypt
+
+---
+
 ## [2026-01-25] - Authentication System Implementation
 
 ### Added

@@ -7,6 +7,8 @@ import { dirname, join } from 'path';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
+import validateRoutes from './routes/validate.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,6 +32,8 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/v1/auth', authRoutes);
 app.use('/v1/users', userRoutes);
+app.use('/v1/validate-requests', validateRoutes);
+app.use('/v1/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
