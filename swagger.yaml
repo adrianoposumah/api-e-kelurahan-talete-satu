@@ -12,14 +12,21 @@ servers:
 
 tags:
   - name: Auth
+    description: Endpoints untuk autentikasi (register, login, refresh, logout)
   - name: Users
+    description: Endpoints untuk manajemen profil user
+  - name: Validate
+    description: Endpoints untuk permintaan validasi user
   - name: Admin
+    description: Endpoints khusus admin untuk manajemen user dan validasi
 
 paths:
+  # ==================== AUTH ROUTES ====================
   /auth/register:
     post:
       tags: [Auth]
       summary: Register user baru
+      description: Mendaftarkan user baru dengan nama, nomor HP, dan password
       requestBody:
         required: true
         content:
@@ -29,15 +36,34 @@ paths:
       responses:
         '201':
           description: User berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User berhasil dibuat
+                  user:
+                    $ref: '#/components/schemas/User'
         '400':
           description: Data tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           description: Nomor HP sudah terdaftar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/login:
     post:
       tags: [Auth]
       summary: Login menggunakan no_hp dan password
+      description: Login untuk mendapatkan access token dan refresh token
       requestBody:
         required: true
         content:
@@ -51,13 +77,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Data tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           description: Login gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/refresh:
     post:
       tags: [Auth]
       summary: Refresh access token menggunakan refresh token
+      description: Mendapatkan access token baru menggunakan refresh token yang valid
       requestBody:
         required: true
         content:
@@ -71,13 +108,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          description: Data tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           description: Refresh token invalid atau expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/logout:
     post:
       tags: [Auth]
       summary: Logout dan revoke refresh token
+      description: Logout dan menghapus refresh token dari database
       security:
         - bearerAuth: []
       requestBody:
@@ -89,11 +137,33 @@ paths:
       responses:
         '200':
           description: Logout sukses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout sukses
+        '400':
+          description: Data tidak valid atau refresh token tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
+  # ==================== USER ROUTES ====================
   /users/me:
     get:
       tags: [Users]
       summary: Mendapatkan profil user yang sedang login
+      description: Mengambil detail profil user yang sedang terautentikasi
       security:
         - bearerAuth: []
       responses:
@@ -103,9 +173,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     patch:
       tags: [Users]
       summary: Update profil user
+      description: Update nama, nomor HP, atau password user yang sedang login
       security:
         - bearerAuth: []
       requestBody:
@@ -117,6 +200,371 @@ paths:
       responses:
         '200':
           description: Profil berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Profil berhasil diupdate
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Tidak ada data yang diupdate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ==================== VALIDATE ROUTES ====================
+  /validate-requests:
+    post:
+      tags: [Validate]
+      summary: Buat permintaan validasi user
+      description: User membuat permintaan validasi dengan NIK
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nik]
+              properties:
+                nik:
+                  type: string
+                  description: Nomor Induk Kependudukan (16 digit)
+                  example: '1234567890123456'
+      responses:
+        '201':
+          description: Permintaan validasi berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Permintaan validasi berhasil dibuat
+                  data:
+                    $ref: '#/components/schemas/ValidateRequest'
+        '400':
+          description: Data tidak valid atau user sudah tervalidasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: NIK tidak ditemukan dalam data kependudukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: NIK sudah digunakan atau user sudah memiliki permintaan pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /validate-requests/me:
+    get:
+      tags: [Validate]
+      summary: Get permintaan validasi user yang sedang login
+      description: Mengambil semua permintaan validasi yang dibuat oleh user yang sedang login
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List permintaan validasi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidateRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ==================== ADMIN ROUTES ====================
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Get semua user dengan pagination
+      description: Admin dapat melihat semua user dengan filter dan pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Nomor halaman
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Jumlah data per halaman
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, inactive, banned]
+          description: Filter berdasarkan status user
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [warga, kepling, lurah, admin]
+          description: Filter berdasarkan role user
+      responses:
+        '200':
+          description: List user dengan pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/users/{id}:
+    get:
+      tags: [Admin]
+      summary: Get user by ID
+      description: Admin dapat melihat detail user berdasarkan ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User ID
+      responses:
+        '200':
+          description: Detail user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/validate-requests:
+    get:
+      tags: [Admin]
+      summary: Get semua permintaan validasi dengan pagination
+      description: Admin dapat melihat semua permintaan validasi dengan filter dan pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Nomor halaman
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Jumlah data per halaman
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter berdasarkan status permintaan
+      responses:
+        '200':
+          description: List permintaan validasi dengan pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidateRequest'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/validate-requests/{id}:
+    get:
+      tags: [Admin]
+      summary: Get permintaan validasi by ID
+      description: Admin dapat melihat detail permintaan validasi berdasarkan ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Validate request ID
+      responses:
+        '200':
+          description: Detail permintaan validasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Permintaan validasi tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags: [Admin]
+      summary: Proses permintaan validasi
+      description: Admin dapat menyetujui atau menolak permintaan validasi
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Validate request ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+                  description: Status keputusan admin
+                admin_notes:
+                  type: string
+                  description: Catatan dari admin (opsional)
+                  example: 'Data valid dan sesuai'
+      responses:
+        '200':
+          description: Permintaan validasi berhasil diproses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Permintaan validasi berhasil disetujui
+                  data:
+                    $ref: '#/components/schemas/ValidateRequest'
+        '400':
+          description: Data tidak valid atau permintaan sudah diproses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Permintaan validasi tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   securitySchemes:
@@ -124,22 +572,29 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT access token dari endpoint login
 
   schemas:
+    # ==================== REQUEST SCHEMAS ====================
     RegisterRequest:
       type: object
       required: [nama, no_hp, password]
       properties:
         nama:
           type: string
+          description: Nama lengkap user
           example: 'Budi Santoso'
         no_hp:
           type: string
+          description: Nomor HP (format 08xxxxxxxxxx, 10-15 digit)
+          pattern: '^08\d{8,13}$'
           example: '081234567890'
         password:
           type: string
           format: password
+          description: Password minimal 8 karakter, mengandung huruf dan angka
           minLength: 8
+          example: 'Password123'
 
     LoginRequest:
       type: object
@@ -147,20 +602,13 @@ components:
       properties:
         no_hp:
           type: string
+          description: Nomor HP yang terdaftar
           example: '081234567890'
         password:
           type: string
           format: password
-
-    LoginResponse:
-      type: object
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        user:
-          $ref: '#/components/schemas/User'
+          description: Password user
+          example: 'Password123'
 
     RefreshRequest:
       type: object
@@ -168,12 +616,8 @@ components:
       properties:
         refresh_token:
           type: string
-
-    RefreshResponse:
-      type: object
-      properties:
-        access_token:
-          type: string
+          description: Refresh token yang didapat saat login
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
     LogoutRequest:
       type: object
@@ -181,35 +625,284 @@ components:
       properties:
         refresh_token:
           type: string
+          description: Refresh token yang akan di-revoke
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
     UserUpdateRequest:
       type: object
       properties:
         nama:
           type: string
-        alamat:
+          description: Nama lengkap baru (opsional)
+          example: 'Budi Santoso Wijaya'
+        no_hp:
           type: string
+          description: Nomor HP baru (opsional)
+          example: '081234567899'
+        password:
+          type: string
+          format: password
+          description: Password baru (opsional)
+          minLength: 8
+          example: 'NewPassword123'
+
+    # ==================== RESPONSE SCHEMAS ====================
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'Login sukses'
+        access_token:
+          type: string
+          description: JWT access token untuk autentikasi
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        refresh_token:
+          type: string
+          description: JWT refresh token untuk mendapatkan access token baru
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        user:
+          $ref: '#/components/schemas/User'
+
+    RefreshResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'Access token diperbarui'
+        access_token:
+          type: string
+          description: JWT access token baru
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
     User:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          description: User ID (BigInt converted to string)
+          example: '1'
         nik:
           type: string
+          nullable: true
+          description: Nomor Induk Kependudukan (16 digit), null jika belum tervalidasi
+          example: '1234567890123456'
         nama:
           type: string
+          description: Nama lengkap user
+          example: 'Budi Santoso'
         no_hp:
           type: string
+          description: Nomor HP user
+          example: '081234567890'
         role:
           type: string
           enum: [warga, kepling, lurah, admin]
+          description: Role user dalam sistem
+          example: 'warga'
         is_validate:
           type: boolean
+          description: Status validasi user (true jika sudah tervalidasi)
+          example: false
         status:
           type: string
           enum: [active, inactive, banned]
+          description: Status akun user
+          example: 'active'
         created_at:
           type: string
+          format: date-time
+          description: Timestamp saat user dibuat
+          example: '2026-01-25T10:30:00.000Z'
         updated_at:
           type: string
+          format: date-time
+          description: Timestamp saat user terakhir diupdate
+          example: '2026-01-25T10:30:00.000Z'
+        kependudukan:
+          $ref: '#/components/schemas/DataKependudukan'
+          nullable: true
+          description: Data kependudukan (hanya muncul jika user sudah tervalidasi)
+
+    DataKependudukan:
+      type: object
+      properties:
+        nik:
+          type: string
+          description: Nomor Induk Kependudukan
+          example: '1234567890123456'
+        nama:
+          type: string
+          description: Nama lengkap sesuai KTP
+          example: 'Budi Santoso'
+        tempat_lahir:
+          type: string
+          description: Tempat lahir
+          example: 'Jakarta'
+        tanggal_lahir:
+          type: string
+          format: date
+          description: Tanggal lahir
+          example: '1990-01-15'
+        jenis_kelamin:
+          type: string
+          enum: [L, P]
+          description: Jenis kelamin (L = Laki-laki, P = Perempuan)
+          example: 'L'
+        golongan_darah:
+          type: string
+          nullable: true
+          description: Golongan darah
+          example: 'A'
+        alamat:
+          type: string
+          description: Alamat lengkap
+          example: 'Jl. Merdeka No. 123'
+        rt:
+          type: string
+          description: RT
+          example: '001'
+        rw:
+          type: string
+          description: RW
+          example: '002'
+        kelurahan:
+          type: string
+          description: Nama kelurahan
+          example: 'Talete Satu'
+        kecamatan:
+          type: string
+          description: Nama kecamatan
+          example: 'Kabila'
+        kabupaten_kota:
+          type: string
+          description: Nama kabupaten/kota
+          example: 'Bone Bolango'
+        provinsi:
+          type: string
+          description: Nama provinsi
+          example: 'Gorontalo'
+        status_kawin:
+          type: string
+          description: Status perkawinan
+          example: 'Belum Kawin'
+        agama:
+          type: string
+          description: Agama
+          example: 'Islam'
+        pekerjaan:
+          type: string
+          description: Pekerjaan
+          example: 'Karyawan Swasta'
+        kewarganegaraan:
+          type: string
+          description: Kewarganegaraan
+          example: 'Indonesia'
+
+    ValidateRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Validate request ID (BigInt converted to string)
+          example: '1'
+        user_id:
+          type: string
+          description: User ID yang mengajukan
+          example: '1'
+        nik:
+          type: string
+          description: NIK yang diajukan untuk validasi
+          example: '1234567890123456'
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          description: Status permintaan validasi
+          example: 'pending'
+        admin_notes:
+          type: string
+          nullable: true
+          description: Catatan dari admin
+          example: 'Data valid dan sesuai'
+        processed_by:
+          type: string
+          nullable: true
+          description: Admin ID yang memproses (null jika belum diproses)
+          example: '2'
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp saat diproses (null jika belum diproses)
+          example: '2026-01-25T11:00:00.000Z'
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp saat permintaan dibuat
+          example: '2026-01-25T10:30:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp saat permintaan terakhir diupdate
+          example: '2026-01-25T10:30:00.000Z'
+        user:
+          type: object
+          nullable: true
+          description: Data user yang mengajukan (jika include user)
+          properties:
+            id:
+              type: string
+              example: '1'
+            nama:
+              type: string
+              example: 'Budi Santoso'
+            no_hp:
+              type: string
+              example: '081234567890'
+        kependudukan:
+          $ref: '#/components/schemas/DataKependudukan'
+          nullable: true
+          description: Data kependudukan dari NIK yang diajukan
+        admin:
+          type: object
+          nullable: true
+          description: Data admin yang memproses (jika sudah diproses)
+          properties:
+            id:
+              type: string
+              example: '2'
+            nama:
+              type: string
+              example: 'Admin Kelurahan'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Halaman saat ini
+          example: 1
+        limit:
+          type: integer
+          description: Jumlah data per halaman
+          example: 10
+        total:
+          type: integer
+          description: Total data keseluruhan
+          example: 50
+        total_pages:
+          type: integer
+          description: Total halaman
+          example: 5
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Jenis error
+          example: 'Bad Request'
+        message:
+          type: string
+          description: Pesan error detail
+          example: 'Data tidak valid'
