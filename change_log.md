@@ -1,5 +1,59 @@
 # Change Log
 
+## [2026-01-26] - Lingkungan & Kepling Assignment System
+
+### Added
+
+- **Lingkungan table (`lingkungan`)**: Environment/neighborhood divisions
+  - `id` - Auto-increment primary key (BigInt)
+  - `nama` - Lingkungan name (varchar 100)
+  - `kode` - Unique code (varchar 10, nullable)
+  - `created_at`, `updated_at` - Timestamps
+
+- **Lingkungan Kepling table (`lingkungan_kepling`)**: Kepling role assignments
+  - `id` - Auto-increment primary key (BigInt)
+  - `lingkungan_id` - Foreign key to lingkungan (cascade delete)
+  - `user_id` - Foreign key to users (cascade delete)
+  - `mulai` - Assignment start date
+  - `selesai` - Assignment end date (nullable)
+  - `created_at`, `updated_at` - Timestamps
+
+- **Lingkungan Service (`src/services/lingkungan.service.js`)**: Business logic
+  - CRUD operations for lingkungan
+  - `assignKepling()` - Assigns user to lingkungan, **automatically changes role to kepling**
+  - `endKeplingAssignment()` - Ends assignment, **reverts role to warga** if no other active assignments
+  - Validation to prevent duplicate active assignments
+
+- **Lingkungan Controller (`src/controllers/lingkungan.controller.js`)**: HTTP handlers
+
+- **Lingkungan Routes (`src/routes/lingkungan.routes.js`)**:
+  - `GET /v1/lingkungan` - List all lingkungan (authenticated)
+  - `GET /v1/lingkungan/:id` - Get lingkungan by ID (authenticated)
+  - `POST /v1/lingkungan` - Create lingkungan (admin only)
+  - `PATCH /v1/lingkungan/:id` - Update lingkungan (admin only)
+  - `DELETE /v1/lingkungan/:id` - Delete lingkungan (admin only)
+  - `GET /v1/lingkungan/kepling` - List kepling assignments (admin/lurah)
+  - `POST /v1/lingkungan/kepling` - Assign kepling (admin only)
+  - `PATCH /v1/lingkungan/kepling/:id/end` - End kepling assignment (admin only)
+  - `GET /v1/lingkungan/kepling/user/:userId` - Get user's kepling history (admin/lurah)
+
+### Updated
+
+- **Data Kependudukan table**: Added `lingkungan_id` column (after `rw`)
+  - Optional foreign key to lingkungan table
+  - Links residents to their neighborhood/environment
+
+- **User model**: Added relation to `LingkunganKepling`
+
+### Key Features
+
+- When admin assigns a user as kepling via `POST /v1/lingkungan/kepling`, the user's role is automatically updated to `kepling`
+- When kepling assignment ends (via `PATCH /v1/lingkungan/kepling/:id/end`), user's role reverts to `warga` if they have no other active assignments
+- Each lingkungan can only have one active kepling at a time
+- Each user can only be an active kepling in one lingkungan at a time
+
+---
+
 ## [2026-01-25] - Admin Routes Refactoring
 
 ### Added

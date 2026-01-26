@@ -84,3 +84,54 @@ export const formatValidateRequestResponse = (request) => ({
       }
     : undefined,
 });
+
+/**
+ * Format lingkungan object for API response
+ * @param {object} lingkungan - Lingkungan object from database
+ * @returns {object} Formatted lingkungan object
+ */
+export const formatLingkunganResponse = (lingkungan) => ({
+  id: lingkungan.id.toString(),
+  nama: lingkungan.nama,
+  kode: lingkungan.kode,
+  created_at: lingkungan.createdAt,
+  updated_at: lingkungan.updatedAt,
+});
+
+/**
+ * Format lingkungan kepling assignment object for API response
+ * @param {object} assignment - LingkunganKepling object from database
+ * @returns {object} Formatted assignment object
+ */
+export const formatLingkunganKeplingResponse = (assignment) => ({
+  id: assignment.id.toString(),
+  lingkungan_id: assignment.lingkunganId.toString(),
+  user_id: assignment.userId.toString(),
+  mulai: assignment.mulai,
+  selesai: assignment.selesai,
+  created_at: assignment.createdAt,
+  updated_at: assignment.updatedAt,
+  lingkungan: assignment.lingkungan ? formatLingkunganResponse(assignment.lingkungan) : undefined,
+  user: assignment.user ? formatUserResponse(assignment.user) : undefined,
+});
+
+/**
+ * Format lingkungan with keplings for API response
+ * @param {object} lingkungan - Lingkungan object with keplings relation
+ * @returns {object} Formatted lingkungan object with keplings
+ */
+export const formatLingkunganWithKeplingsResponse = (lingkungan) => ({
+  ...formatLingkunganResponse(lingkungan),
+  keplings: lingkungan.keplings
+    ? lingkungan.keplings.map((k) => ({
+        id: k.id.toString(),
+        lingkungan_id: k.lingkunganId.toString(),
+        user_id: k.userId.toString(),
+        mulai: k.mulai,
+        selesai: k.selesai,
+        created_at: k.createdAt,
+        updated_at: k.updatedAt,
+        user: k.user ? formatUserResponse(k.user) : undefined,
+      }))
+    : [],
+});

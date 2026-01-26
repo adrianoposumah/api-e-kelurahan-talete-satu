@@ -58,6 +58,7 @@ model User {
   kependudukan DataKependudukan? @relation(fields: [nik], references: [nik])
   validateRequests       ValidateRequest[] @relation("UserValidateRequests")
   processedValidateRequests ValidateRequest[] @relation("AdminProcessedRequests")
+  lingkunganKepling LingkunganKepling[]
 
   @@map("users")
 }
@@ -78,6 +79,38 @@ model UserToken {
   @@map("user_tokens")
 }
 
+// Lingkungan table - environment/neighborhood divisions
+model Lingkungan {
+  id          BigInt   @id @default(autoincrement()) @db.BigInt
+  nama        String   @db.VarChar(100)
+  kode        String?  @unique @db.VarChar(10)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  keplings    LingkunganKepling[]
+  kependudukan DataKependudukan[]
+
+  @@map("lingkungan")
+}
+
+// Lingkungan Kepling table - assigns kepling role users to environments
+model LingkunganKepling {
+  id            BigInt    @id @default(autoincrement()) @db.BigInt
+  lingkunganId  BigInt    @map("lingkungan_id") @db.BigInt
+  userId        BigInt    @map("user_id") @db.BigInt
+  mulai         DateTime  @db.Date
+  selesai       DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  lingkungan    Lingkungan @relation(fields: [lingkunganId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("lingkungan_kepling")
+}
+
 // Data kependudukan table
 model DataKependudukan {
   nik             String       @id @db.Char(16)
@@ -90,6 +123,7 @@ model DataKependudukan {
   alamat          String       @db.Text
   rt              String?      @db.Char(3)
   rw              String?      @db.Char(3)
+  lingkunganId    BigInt?      @map("lingkungan_id") @db.BigInt
   kelurahan       String       @db.VarChar(100)
   kecamatan       String       @db.VarChar(100)
   kabupatenKota   String       @map("kabupaten_kota") @db.VarChar(100)
@@ -106,6 +140,7 @@ model DataKependudukan {
   // Relations
   user            User?
   validateRequests ValidateRequest[]
+  lingkungan      Lingkungan?  @relation(fields: [lingkunganId], references: [id])
 
   @@map("data_kependudukan")
 }
