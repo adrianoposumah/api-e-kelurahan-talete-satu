@@ -229,7 +229,7 @@ class LetterController {
    */
   async getMyLetters(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const { page, limit } = req.query;
 
       const { letters, pagination } = await letterService.getLettersByUser({
@@ -275,7 +275,7 @@ class LetterController {
   async downloadLetter(req, res, next) {
     try {
       const { code } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const userRole = req.user.role;
 
       const pdfPath = await letterService.getLetterPdfPath(code, userId, userRole);
@@ -317,7 +317,7 @@ class LetterController {
   async getLetterByCode(req, res, next) {
     try {
       const { code } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const userRole = req.user.role;
 
       const letter = await letterService.getLetterByVerificationCode(code);

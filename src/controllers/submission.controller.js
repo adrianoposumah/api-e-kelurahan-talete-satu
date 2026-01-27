@@ -12,7 +12,7 @@ class SubmissionController {
    */
   async createSubmission(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const { type, payload } = req.body;
 
       if (!type) {
@@ -69,7 +69,7 @@ class SubmissionController {
   async addDocument(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const { file_path, file_type, description } = req.body;
 
       if (!file_path) {
@@ -119,7 +119,7 @@ class SubmissionController {
    */
   async getMySubmissions(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const { page, limit, status, type } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsByUser({
@@ -145,7 +145,7 @@ class SubmissionController {
   async getSubmissionById(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userId;
       const userRole = req.user.role;
 
       const submission = await submissionService.getSubmissionById(id);
@@ -202,7 +202,7 @@ class SubmissionController {
   async deleteSubmission(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userId;
 
       await submissionService.deleteSubmission({
         submissionId: id,
@@ -242,7 +242,7 @@ class SubmissionController {
    */
   async getSubmissionsForKepling(req, res, next) {
     try {
-      const keplingUserId = req.user.id;
+      const keplingUserId = req.user.userId;
       const { page, limit, status, type } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsForKepling({
@@ -274,7 +274,7 @@ class SubmissionController {
   async verifyDocument(req, res, next) {
     try {
       const { documentId } = req.params;
-      const keplingUserId = req.user.id;
+      const keplingUserId = req.user.userId;
       const { verified } = req.body;
 
       if (typeof verified !== 'boolean') {
@@ -317,7 +317,7 @@ class SubmissionController {
   async approveByKepling(req, res, next) {
     try {
       const { id } = req.params;
-      const keplingUserId = req.user.id;
+      const keplingUserId = req.user.userId;
       const { note } = req.body;
 
       const submission = await submissionService.approveByKepling({
@@ -359,7 +359,7 @@ class SubmissionController {
   async rejectByKepling(req, res, next) {
     try {
       const { id } = req.params;
-      const keplingUserId = req.user.id;
+      const keplingUserId = req.user.userId;
       const { reason, note } = req.body;
 
       const submission = await submissionService.rejectByKepling({
@@ -427,7 +427,7 @@ class SubmissionController {
   async approveByLurah(req, res, next) {
     try {
       const { id } = req.params;
-      const lurahUserId = req.user.id;
+      const lurahUserId = req.user.userId;
       const { note } = req.body;
 
       const submission = await submissionService.approveByLurah({
@@ -469,7 +469,7 @@ class SubmissionController {
   async rejectByLurah(req, res, next) {
     try {
       const { id } = req.params;
-      const lurahUserId = req.user.id;
+      const lurahUserId = req.user.userId;
       const { reason, note } = req.body;
 
       const submission = await submissionService.rejectByLurah({

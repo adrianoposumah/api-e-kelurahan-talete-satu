@@ -1,5 +1,195 @@
 # Change Log
 
+## [2026-01-27] - Electronic Letter Issuance System
+
+### Added
+
+- **LurahKey table (`lurah_keys`)**: RSA key pairs for digital signatures
+  - `id` - Auto-increment primary key (BigInt)
+  - `lurah_user_id` - Foreign key to users (Lurah)
+  - `public_key` - RSA public key (text)
+  - `encrypted_private_key` - AES-encrypted RSA private key (text)
+  - `salt` - Encryption salt (varchar 64)
+  - `iv` - Initialization vector (varchar 32)
+  - `is_active` - Key status (boolean)
+  - `created_at`, `updated_at` - Timestamps
+
+- **IssuedLetter table (`issued_letters`)**: Issued letter records
+  - `id` - Auto-increment primary key (BigInt)
+  - `submission_id` - Foreign key to submissions (unique, one-to-one)
+  - `letter_number` - Unique letter number
+  - `verification_code` - Unique 16-char code for verification
+  - `type` - Letter type (varchar 50)
+  - `canonical_data` - Canonical data used for signing (text)
+  - `canonical_hash` - SHA-256 hash of canonical data
+  - `signature` - RSA-SHA256 digital signature (text)
+  - `signed_by` - Foreign key to users (Lurah who signed)
+  - `pdf_path` - Path to generated PDF file
+  - `is_revoked` - Revocation status (boolean)
+  - `revoked_at` - Revocation timestamp (nullable)
+  - `revoked_reason` - Revocation reason (text, nullable)
+  - `issued_at` - Issue timestamp
+  - `expires_at` - Expiry date (nullable)
+  - `created_at`, `updated_at` - Timestamps
+
+- **Letter Templates (`src/templates/`)**: HTML templates and JSON schemas
+  - `domisili/` - Surat Keterangan Domisili (validity: 30 days)
+  - `usaha/` - Surat Keterangan Usaha (validity: 90 days)
+  - `kematian/` - Surat Keterangan Kematian (no expiry)
+  - `kelakuan_baik/` - Surat Keterangan Berkelakuan Baik (validity: 30 days)
+  - `keramaian/` - Surat Izin Keramaian (validity: 7 days)
+
+- **Template Service (`src/services/template.service.js`)**:
+  - `getAvailableTemplates()` - List all available templates
+  - `getSchema(type)` - Get template schema for validation
+  - `getTemplate(type)` - Load HTML template
+  - `validatePayload(type, payload)` - Validate submission payload
+  - `prepareTemplateData(submission, meta)` - Prepare data for rendering
+  - `renderTemplate(type, data)` - Render HTML with placeholders
+
+- **Crypto Service (`src/services/crypto.service.js`)**:
+  - `generateKeyPair()` - Generate RSA 2048-bit key pair
+  - `encryptPrivateKey(privateKey, passphrase)` - AES-256-CBC encryption
+  - `decryptPrivateKey(encrypted, passphrase, salt, iv)` - Decrypt private key
+  - `setLurahKeyPair(lurahUserId, passphrase)` - Store key pair in database
+  - `getActiveLurahKey()` - Retrieve active Lurah key
+  - `buildCanonicalData(input)` - Build deterministic data for signing
+  - `hashData(data)` - SHA-256 hashing
+  - `signData(data, privateKey)` - RSA-SHA256 signing
+  - `verifySignature(data, signature, publicKey)` - Verify signature
+  - `createLetterSignature(input, lurahUserId, passphrase)` - Complete signing flow
+  - `verifyLetterSignature(canonicalData, signature, publicKey)` - Verify letter
+
+- **PDF Service (`src/services/pdf.service.js`)**:
+  - `generateQRCode(data, options)` - Generate QR code as data URI
+  - `renderToPdf(html)` - Render HTML to PDF using Puppeteer
+  - `savePdf(buffer, filename)` - Save PDF to storage
+  - `generateLetterPdf(options)` - Complete PDF generation with QR code
+
+- **Letter Service (`src/services/letter.service.js`)**:
+  - `generateLetterNumber(type, schema)` - Generate unique letter number
+  - `issueLetter(submissionId, passphrase)` - Issue letter from approved submission
+  - `getLetterByVerificationCode(code)` - Get letter details
+  - `verifyLetter(code)` - Verify letter authenticity
+  - `getLettersByUser(userId)` - Get user's issued letters
+  - `getAllLetters(options)` - Get all letters (admin)
+  - `revokeLetter(code, reason)` - Revoke an issued letter
+  - `getLetterPdfPath(code, userId, role)` - Get PDF path with access control
+
+- **Letter Controller (`src/controllers/letter.controller.js`)**
+
+- **Letter Routes (`src/routes/letter.routes.js`)**:
+  - `GET /v1/letters/templates` - List available templates (public)
+  - `GET /v1/letters/templates/:type` - Get template schema (public)
+  - `GET /v1/letters/verify/:code` - Verify letter authenticity (public)
+  - `GET /v1/letters` - Get user's issued letters (authenticated)
+  - `GET /v1/letters/:code` - Get letter details (authenticated)
+  - `GET /v1/letters/download/:code` - Download letter PDF (authenticated)
+  - `GET /v1/letters/admin/all` - Get all letters (admin/lurah)
+  - `POST /v1/letters/keys/generate` - Generate Lurah key pair (admin)
+  - `POST /v1/letters/issue/:submissionId` - Issue letter (admin)
+  - `POST /v1/letters/:code/revoke` - Revoke letter (admin)
+
+### Dependencies Added
+
+- `puppeteer` - Headless Chrome for PDF generation
+- `qrcode` - QR code generation
+- `uuid` - UUID generation for verification codes
+
+### Key Features
+
+- **Digital Signatures**: RSA-SHA256 signatures with passphrase-protected private keys
+- **QR Code Verification**: Each letter has a QR code linking to public verification endpoint
+- **PDF Generation**: Professional letter PDFs generated with Puppeteer
+- **Template System**: Dynamic templates with auto-populated fields from user data
+- **Letter Revocation**: Ability to revoke issued letters with reason tracking
+- **Expiry Management**: Configurable validity periods per letter type
+
+---
+
+## [2026-01-27] - Submission Workflow System
+
+### Added
+
+- **Submission table (`submissions`)**: Letter request submissions
+  - `id` - Auto-increment primary key (BigInt)
+  - `user_id` - Foreign key to users (cascade delete)
+  - `lingkungan_id` - Foreign key to lingkungan
+  - `type` - Submission type (varchar 50)
+  - `status` - Workflow status enum
+  - `payload` - Additional data (JSON, nullable)
+  - `reject_reason` - Rejection reason (text, nullable)
+  - `created_at`, `updated_at` - Timestamps
+
+- **SubmissionDocument table (`submission_documents`)**: Supporting documents
+  - `id` - Auto-increment primary key (BigInt)
+  - `submission_id` - Foreign key to submissions (cascade delete)
+  - `file_path` - Document file path
+  - `file_type` - Document type (varchar 50, nullable)
+  - `description` - Document description (text, nullable)
+  - `verified` - Verification status (boolean, default false)
+  - `created_at` - Timestamp
+
+- **SubmissionApproval table (`submission_approvals`)**: Approval history
+  - `id` - Auto-increment primary key (BigInt)
+  - `submission_id` - Foreign key to submissions (cascade delete)
+  - `approved_by` - Foreign key to users (approver)
+  - `stage` - Approval stage enum (kepling, lurah)
+  - `status` - Approval status enum (approved, rejected)
+  - `note` - Approval note (text, nullable)
+  - `created_at` - Timestamp
+
+- **Submission Service (`src/services/submission.service.js`)**:
+  - `createSubmission(data)` - Create new submission (warga)
+  - `addDocument(data)` - Add document to submission
+  - `getSubmissionsByUser(options)` - Get user's submissions
+  - `getSubmissionsForKepling(options)` - Get submissions for kepling's lingkungan
+  - `getSubmissionsForLurah(options)` - Get all submissions (lurah)
+  - `getSubmissionById(id)` - Get submission details
+  - `verifyDocument(data)` - Verify document (kepling)
+  - `approveByKepling(data)` - Approve as kepling
+  - `rejectByKepling(data)` - Reject as kepling
+  - `approveByLurah(data)` - Approve as lurah
+  - `rejectByLurah(data)` - Reject as lurah
+  - `issueSubmission(data)` - Mark as issued (admin)
+  - `deleteSubmission(data)` - Delete submission (owner)
+
+- **Submission Controller (`src/controllers/submission.controller.js`)**
+
+- **Submission Routes (`src/routes/submission.routes.js`)**:
+  - **Warga Routes**:
+    - `POST /v1/submissions` - Create submission
+    - `GET /v1/submissions` - Get own submissions
+    - `GET /v1/submissions/:id` - Get submission by ID
+    - `POST /v1/submissions/:id/documents` - Add document
+    - `DELETE /v1/submissions/:id` - Delete submission
+  - **Kepling Routes**:
+    - `GET /v1/submissions/kepling/list` - Get lingkungan submissions
+    - `PATCH /v1/submissions/:id/documents/:documentId/verify` - Verify document
+    - `POST /v1/submissions/:id/kepling/approve` - Approve submission
+    - `POST /v1/submissions/:id/kepling/reject` - Reject submission
+  - **Lurah Routes**:
+    - `GET /v1/submissions/lurah/list` - Get all submissions
+    - `POST /v1/submissions/:id/lurah/approve` - Approve submission
+    - `POST /v1/submissions/:id/lurah/reject` - Reject submission
+  - **Admin Routes**:
+    - `POST /v1/submissions/:id/issue` - Issue submission
+
+### Enums Added
+
+- `SubmissionStatus`: pending_kepling, pending_lurah, approved, rejected, issued
+- `ApprovalStage`: kepling, lurah
+- `ApprovalStatus`: approved, rejected
+
+### Workflow
+
+1. **Warga** creates submission → status: `pending_kepling`
+2. **Kepling** verifies documents and approves/rejects → status: `pending_lurah` or `rejected`
+3. **Lurah** reviews and approves/rejects → status: `approved` or `rejected`
+4. **Admin** issues letter using Letter service → status: `issued`
+
+---
+
 ## [2026-01-26] - Lingkungan & Kepling Assignment System
 
 ### Added
