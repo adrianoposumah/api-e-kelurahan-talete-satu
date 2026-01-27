@@ -1,0 +1,46 @@
+{
+  "type": "usaha",
+  "name": "Surat Keterangan Usaha",
+  "description": "Surat keterangan usaha untuk warga yang memiliki usaha",
+  "requiredFields": [
+    {
+      "name": "nama_usaha",
+      "label": "Nama Usaha",
+      "type": "text",
+      "required": true,
+      "maxLength": 200
+    },
+    {
+      "name": "jenis_usaha",
+      "label": "Jenis Usaha",
+      "type": "text",
+      "required": true,
+      "maxLength": 200
+    },
+    {
+      "name": "alamat_usaha",
+      "label": "Alamat Usaha",
+      "type": "text",
+      "required": true,
+      "maxLength": 500
+    },
+    {
+      "name": "tahun_mulai",
+      "label": "Tahun Mulai Usaha",
+      "type": "number",
+      "required": true,
+      "min": 1900,
+      "max": 2100
+    },
+    {
+      "name": "tujuan",
+      "label": "Tujuan Pengajuan",
+      "type": "text",
+      "required": true,
+      "maxLength": 500
+    }
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "nik", "jenis_kelamin", "tempat_lahir", "tanggal_lahir", "pekerjaan", "agama", "kewarganegaraan", "alamat", "lingkungan"],
+  "letterPrefix": "U.15",
+  "validityDays": 90
+}

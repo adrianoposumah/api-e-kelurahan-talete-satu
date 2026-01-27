@@ -21,7 +21,10 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.17.2"
+    "pg": "^8.17.2",
+    "puppeteer": "^24.36.0",
+    "qrcode": "^1.5.4",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Surat Keterangan Kematian</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 2cm 2.5cm;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        color: #000;
+      }
+
+      .container {
+        max-width: 21cm;
+        margin: 0 auto;
+        padding: 0;
+      }
+
+      .kop-surat {
+        display: flex;
+        align-items: center;
+        padding-bottom: 10px;
+        border-bottom: 3px solid #000;
+        margin-bottom: 20px;
+      }
+
+      .logo {
+        width: 80px;
+        height: 80px;
+        margin-right: 20px;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .kop-text {
+        text-align: center;
+        flex: 1;
+      }
+
+      .kop-line-1 {
+        font-size: 14pt;
+        font-weight: 600;
+      }
+      .kop-line-2 {
+        font-size: 16pt;
+        font-weight: bold;
+      }
+      .kop-line-3 {
+        font-size: 18pt;
+        font-weight: bold;
+      }
+      .kop-line-4 {
+        font-size: 12pt;
+        font-weight: normal;
+      }
+      .kop-line-5 {
+        font-size: 14pt;
+        font-weight: 600;
+      }
+
+      .judul-surat {
+        text-align: center;
+        margin: 30px 0 10px 0;
+      }
+
+      .judul-surat h1 {
+        font-size: 14pt;
+        font-weight: 600;
+        text-decoration: underline;
+        margin-bottom: 5px;
+      }
+
+      .nomor-surat {
+        font-size: 12pt;
+        font-weight: normal;
+      }
+
+      .content {
+        margin-top: 30px;
+        text-align: justify;
+      }
+
+      .paragraf {
+        text-indent: 40px;
+        margin-bottom: 15px;
+      }
+
+      .info-section {
+        margin: 20px 0 20px 40px;
+      }
+
+      .section-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+
+      .info-row {
+        display: flex;
+        margin-bottom: 5px;
+      }
+
+      .info-label {
+        width: 200px;
+        flex-shrink: 0;
+      }
+
+      .info-separator {
+        width: 20px;
+        text-align: center;
+      }
+
+      .info-value {
+        flex: 1;
+      }
+
+      .signature-section {
+        margin-top: 40px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .signature-box {
+        text-align: center;
+        width: 250px;
+      }
+
+      .qr-code {
+        width: 100px;
+        height: 100px;
+        margin: 10px auto;
+      }
+
+      .qr-code img {
+        width: 100%;
+        height: 100%;
+      }
+
+      .signature-name {
+        font-weight: bold;
+        text-transform: uppercase;
+        text-decoration: underline;
+        margin-top: 10px;
+      }
+
+      .signature-nip {
+        font-size: 11pt;
+      }
+
+      .footer {
+        margin-top: 30px;
+        text-align: center;
+        font-size: 9pt;
+        color: #666;
+        border-top: 1px solid #ccc;
+        padding-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="kop-surat">
+        <div class="logo">
+          <img src="{{LOGO_URL}}" alt="Logo Kota Tomohon" />
+        </div>
+        <div class="kop-text">
+          <div class="kop-line-1">PEMERINTAHAN KOTA TOMOHON</div>
+          <div class="kop-line-2">KECAMATAN TOMOHON TENGAH</div>
+          <div class="kop-line-3">KELURAHAN TALETE SATU</div>
+          <div class="kop-line-4">Jl. Sineleyan No.118 A Talete Satu</div>
+          <div class="kop-line-5">TOMOHON 95441</div>
+        </div>
+      </div>
+
+      <div class="judul-surat">
+        <h1>SURAT KETERANGAN KEMATIAN</h1>
+        <div class="nomor-surat">Nomor : {{NOMOR_SURAT}}</div>
+      </div>
+
+      <div class="content">
+        <p class="paragraf">Yang bertandatangan dibawah ini, Lurah Kelurahan Talete Satu Kecamatan Tomohon Tengah Kota Tomohon, menerangkan bahwa:</p>
+
+        <div class="info-section">
+          <div class="section-title">Data Almarhum/Almarhumah:</div>
+          <div class="info-row">
+            <span class="info-label">Nama</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NAMA_ALMARHUM}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">NIK</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NIK_ALMARHUM}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tanggal Meninggal</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{TANGGAL_MENINGGAL}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tempat Meninggal</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{TEMPAT_MENINGGAL}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Sebab Kematian</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{SEBAB_KEMATIAN}}</span>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <div class="section-title">Data Pelapor:</div>
+          <div class="info-row">
+            <span class="info-label">Nama</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NAMA_LENGKAP}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">NIK</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NIK}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Alamat</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{ALAMAT}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Hubungan dengan Almarhum</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{HUBUNGAN_PELAPOR}}</span>
+          </div>
+        </div>
+
+        <p class="paragraf">Demikian surat keterangan ini kami buat dengan sebenarnya, untuk dapat dipergunakan sebagaimana mestinya.</p>
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <div>Tomohon, {{TANGGAL_PENERBITAN}}</div>
+          <div>Mengetahui,</div>
+          <div>LURAH TALETE SATU,</div>
+          <div class="qr-code">
+            <img src="{{QR_CODE_DATA}}" alt="QR Code Verifikasi" />
+          </div>
+          <div class="signature-name">{{NAMA_LURAH}}</div>
+          <div class="signature-nip">NIP. {{NIP_LURAH}}</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        Dokumen ini telah ditandatangani secara elektronik dan diterbitkan melalui aplikasi e-Kelurahan Talete Satu.<br />
+        Verifikasi keaslian dokumen di: {{VERIFICATION_URL}}
+      </div>
+    </div>
+  </body>
+</html>

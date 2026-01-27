@@ -10,6 +10,8 @@ import userRoutes from './routes/user.routes.js';
 import validateRoutes from './routes/validate.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import lingkunganRoutes from './routes/lingkungan.routes.js';
+import submissionRoutes from './routes/submission.routes.js';
+import letterRoutes from './routes/letter.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +23,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static assets (logos, etc.)
+app.use('/assets', express.static(join(__dirname, '..', 'public', 'assets')));
 
 // Swagger documentation
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -36,6 +41,8 @@ app.use('/v1/users', userRoutes);
 app.use('/v1/validate-requests', validateRoutes);
 app.use('/v1/admin', adminRoutes);
 app.use('/v1/lingkungan', lingkunganRoutes);
+app.use('/v1/submissions', submissionRoutes);
+app.use('/v1/letters', letterRoutes);
 
 // 404 handler
 app.use((req, res) => {

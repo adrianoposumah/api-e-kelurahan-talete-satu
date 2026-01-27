@@ -1,0 +1,287 @@
+import crypto from 'crypto';
+import prisma from '../config/prisma.js';
+
+/**
+ * Crypto Service - Handles digital signatures and key management
+ */
+class CryptoService {
+  constructor() {
+    this.algorithm = 'RSA-SHA256';
+    this.keySize = 2048;
+  }
+
+  /**
+   * Generate a new RSA key pair
+   * @returns {object} { publicKey, privateKey }
+   */
+  generateKeyPair() {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: this.keySize,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
+
+    return { publicKey, privateKey };
+  }
+
+  /**
+   * Encrypt private key for storage
+   * @param {string} privateKey - Private key PEM
+   * @param {string} passphrase - Encryption passphrase
+   * @returns {string} Encrypted private key
+   */
+  encryptPrivateKey(privateKey, passphrase) {
+    const algorithm = 'aes-256-gcm';
+    const key = crypto.scryptSync(passphrase, 'salt', 32);
+    const iv = crypto.randomBytes(16);
+
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(privateKey, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+
+    const authTag = cipher.getAuthTag();
+
+    return JSON.stringify({
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      data: encrypted,
+    });
+  }
+
+  /**
+   * Decrypt private key
+   * @param {string} encryptedData - Encrypted private key JSON
+   * @param {string} passphrase - Decryption passphrase
+   * @returns {string} Decrypted private key PEM
+   */
+  decryptPrivateKey(encryptedData, passphrase) {
+    const algorithm = 'aes-256-gcm';
+    const key = crypto.scryptSync(passphrase, 'salt', 32);
+
+    const { iv, authTag, data } = JSON.parse(encryptedData);
+
+    const decipher = crypto.createDecipheriv(algorithm, key, Buffer.from(iv, 'hex'));
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+
+    let decrypted = decipher.update(data, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+
+  /**
+   * Set or update key pair for a Lurah
+   * @param {string} lurahUserId - Lurah user ID
+   * @param {string} passphrase - Passphrase for encrypting private key
+   * @returns {Promise<object>} Created/updated key record
+   */
+  async setLurahKeyPair(lurahUserId, passphrase) {
+    // Verify user is a lurah
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(lurahUserId) },
+    });
+
+    if (!user) {
+      const error = new Error('User tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (user.role !== 'lurah') {
+      const error = new Error('User bukan Lurah');
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    // Generate new key pair
+    const { publicKey, privateKey } = this.generateKeyPair();
+
+    // Encrypt private key
+    const encryptedPrivateKey = this.encryptPrivateKey(privateKey, passphrase);
+
+    // Deactivate existing keys
+    await prisma.lurahKey.updateMany({
+      where: { lurahUserId: BigInt(lurahUserId) },
+      data: { isActive: false },
+    });
+
+    // Create new key record
+    const keyRecord = await prisma.lurahKey.create({
+      data: {
+        lurahUserId: BigInt(lurahUserId),
+        publicKey,
+        privateKey: encryptedPrivateKey,
+        algorithm: this.algorithm,
+        isActive: true,
+      },
+    });
+
+    return {
+      id: keyRecord.id.toString(),
+      publicKey,
+      algorithm: keyRecord.algorithm,
+      createdAt: keyRecord.createdAt,
+    };
+  }
+
+  /**
+   * Get active key for a Lurah
+   * @param {string} lurahUserId - Lurah user ID
+   * @returns {Promise<object>} Key record
+   */
+  async getLurahKey(lurahUserId) {
+    const keyRecord = await prisma.lurahKey.findFirst({
+      where: {
+        lurahUserId: BigInt(lurahUserId),
+        isActive: true,
+      },
+    });
+
+    if (!keyRecord) {
+      const error = new Error('Lurah belum memiliki key pair yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return keyRecord;
+  }
+
+  /**
+   * Get any active Lurah key
+   * @returns {Promise<object>} Key record with lurah user info
+   */
+  async getActiveLurahKey() {
+    const keyRecord = await prisma.lurahKey.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!keyRecord) {
+      const error = new Error('Tidak ada key pair Lurah yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    // Get lurah user info
+    const lurah = await prisma.user.findUnique({
+      where: { id: keyRecord.lurahUserId },
+      include: { kependudukan: true },
+    });
+
+    return { keyRecord, lurah };
+  }
+
+  /**
+   * Build canonical data string from letter data
+   * @param {object} data - Letter data
+   * @returns {string} Canonical string
+   */
+  buildCanonicalData(data) {
+    // Create deterministic canonical string
+    const fields = [
+      `nama=${data.nama}`,
+      `nik=${data.nik}`,
+      `jenis_kelamin=${data.jenisKelamin}`,
+      `lingkungan=${data.lingkungan}`,
+      `nomor_surat=${data.nomorSurat}`,
+      `type=${data.type}`,
+      `tanggal=${data.tanggal}`,
+      `issued_by=${data.issuedBy}`,
+    ];
+
+    return fields.join('\n');
+  }
+
+  /**
+   * Hash data using SHA-256
+   * @param {string} data - Data to hash
+   * @returns {string} Hex-encoded hash
+   */
+  hashData(data) {
+    return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
+  }
+
+  /**
+   * Sign data with private key
+   * @param {string} data - Data to sign
+   * @param {string} privateKeyPem - Private key in PEM format
+   * @returns {string} Base64-encoded signature
+   */
+  signData(data, privateKeyPem) {
+    const sign = crypto.createSign('SHA256');
+    sign.update(data);
+    sign.end();
+
+    const signature = sign.sign(privateKeyPem, 'base64');
+    return signature;
+  }
+
+  /**
+   * Verify signature
+   * @param {string} data - Original data
+   * @param {string} signature - Base64-encoded signature
+   * @param {string} publicKeyPem - Public key in PEM format
+   * @returns {boolean} Verification result
+   */
+  verifySignature(data, signature, publicKeyPem) {
+    try {
+      const verify = crypto.createVerify('SHA256');
+      verify.update(data);
+      verify.end();
+
+      return verify.verify(publicKeyPem, signature, 'base64');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Create digital signature for a letter
+   * @param {object} letterData - Letter data to sign
+   * @param {string} lurahUserId - Lurah user ID
+   * @param {string} passphrase - Passphrase for private key
+   * @returns {Promise<object>} Signature data
+   */
+  async createLetterSignature(letterData, lurahUserId, passphrase) {
+    // Get lurah's key
+    const keyRecord = await this.getLurahKey(lurahUserId);
+
+    // Decrypt private key
+    const privateKey = this.decryptPrivateKey(keyRecord.privateKey, passphrase);
+
+    // Build canonical data
+    const canonicalData = this.buildCanonicalData(letterData);
+
+    // Hash canonical data
+    const canonicalHash = this.hashData(canonicalData);
+
+    // Sign the hash
+    const signature = this.signData(canonicalData, privateKey);
+
+    return {
+      canonicalData,
+      canonicalHash,
+      signature,
+      algorithm: keyRecord.algorithm,
+      signedBy: lurahUserId,
+    };
+  }
+
+  /**
+   * Verify a letter's signature
+   * @param {string} canonicalData - Original canonical data
+   * @param {string} signature - Base64-encoded signature
+   * @param {string} publicKey - Public key PEM
+   * @returns {boolean} Verification result
+   */
+  verifyLetterSignature(canonicalData, signature, publicKey) {
+    return this.verifySignature(canonicalData, signature, publicKey);
+  }
+}
+
+export default new CryptoService();

@@ -1,0 +1,56 @@
+{
+  "type": "keramaian",
+  "name": "Surat Izin Keramaian",
+  "description": "Surat izin penyelenggaraan keramaian/acara",
+  "requiredFields": [
+    {
+      "name": "nama_acara",
+      "label": "Nama Acara",
+      "type": "text",
+      "required": true,
+      "maxLength": 200
+    },
+    {
+      "name": "jenis_acara",
+      "label": "Jenis Acara",
+      "type": "text",
+      "required": true,
+      "maxLength": 100
+    },
+    {
+      "name": "tanggal_acara",
+      "label": "Tanggal Acara",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "waktu_mulai",
+      "label": "Waktu Mulai",
+      "type": "time",
+      "required": true
+    },
+    {
+      "name": "waktu_selesai",
+      "label": "Waktu Selesai",
+      "type": "time",
+      "required": true
+    },
+    {
+      "name": "tempat_acara",
+      "label": "Tempat Acara",
+      "type": "text",
+      "required": true,
+      "maxLength": 300
+    },
+    {
+      "name": "perkiraan_peserta",
+      "label": "Perkiraan Jumlah Peserta",
+      "type": "number",
+      "required": true,
+      "min": 1
+    }
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "nik", "alamat", "lingkungan"],
+  "letterPrefix": "KR.15",
+  "validityDays": 7
+}

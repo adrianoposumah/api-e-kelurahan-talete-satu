@@ -135,3 +135,129 @@ export const formatLingkunganWithKeplingsResponse = (lingkungan) => ({
       }))
     : [],
 });
+
+// ==================== SUBMISSION FORMATTERS ====================
+
+/**
+ * Format submission document object for API response
+ * @param {object} document - SubmissionDocument object from database
+ * @returns {object} Formatted document object
+ */
+export const formatSubmissionDocumentResponse = (document) => ({
+  id: document.id.toString(),
+  submission_id: document.submissionId.toString(),
+  file_path: document.filePath,
+  file_type: document.fileType,
+  description: document.description,
+  verified: document.verified,
+  created_at: document.createdAt,
+});
+
+/**
+ * Format submission approval object for API response
+ * @param {object} approval - SubmissionApproval object from database
+ * @returns {object} Formatted approval object
+ */
+export const formatSubmissionApprovalResponse = (approval) => ({
+  id: approval.id.toString(),
+  submission_id: approval.submissionId.toString(),
+  approved_by: approval.approvedBy.toString(),
+  stage: approval.stage,
+  status: approval.status,
+  note: approval.note,
+  created_at: approval.createdAt,
+  approver: approval.approver
+    ? {
+        id: approval.approver.id.toString(),
+        nama: approval.approver.nama,
+        role: approval.approver.role,
+      }
+    : undefined,
+});
+
+/**
+ * Format submission object for API response
+ * @param {object} submission - Submission object from database
+ * @returns {object} Formatted submission object
+ */
+export const formatSubmissionResponse = (submission) => ({
+  id: submission.id.toString(),
+  user_id: submission.userId.toString(),
+  lingkungan_id: submission.lingkunganId.toString(),
+  type: submission.type,
+  status: submission.status,
+  payload: submission.payload,
+  reject_reason: submission.rejectReason,
+  created_at: submission.createdAt,
+  updated_at: submission.updatedAt,
+  user: submission.user
+    ? {
+        id: submission.user.id.toString(),
+        nik: submission.user.nik,
+        nama: submission.user.nama,
+        no_hp: submission.user.noHp,
+        kependudukan: submission.user.kependudukan ? formatKependudukanResponse(submission.user.kependudukan) : undefined,
+      }
+    : undefined,
+  lingkungan: submission.lingkungan
+    ? {
+        ...formatLingkunganResponse(submission.lingkungan),
+        keplings: submission.lingkungan.keplings
+          ? submission.lingkungan.keplings.map((k) => ({
+              id: k.id.toString(),
+              user_id: k.userId.toString(),
+              user: k.user
+                ? {
+                    id: k.user.id.toString(),
+                    nama: k.user.nama,
+                    no_hp: k.user.noHp,
+                  }
+                : undefined,
+            }))
+          : undefined,
+      }
+    : undefined,
+  documents: submission.documents ? submission.documents.map(formatSubmissionDocumentResponse) : [],
+  approvals: submission.approvals ? submission.approvals.map(formatSubmissionApprovalResponse) : [],
+});
+
+// ==================== ISSUED LETTER FORMATTERS ====================
+
+/**
+ * Format issued letter object for API response
+ * @param {object} letter - IssuedLetter object from database
+ * @returns {object} Formatted issued letter object
+ */
+export const formatIssuedLetterResponse = (letter) => ({
+  id: letter.id.toString(),
+  submission_id: letter.submissionId.toString(),
+  letter_number: letter.letterNumber,
+  verification_code: letter.verificationCode,
+  type: letter.type,
+  signed_by: letter.signedBy.toString(),
+  issued_at: letter.issuedAt,
+  expires_at: letter.expiresAt,
+  is_revoked: letter.isRevoked,
+  revoked_at: letter.revokedAt,
+  revoked_reason: letter.revokedReason,
+  created_at: letter.createdAt,
+  submission: letter.submission
+    ? {
+        id: letter.submission.id.toString(),
+        type: letter.submission.type,
+        user: letter.submission.user
+          ? {
+              id: letter.submission.user.id.toString(),
+              nama: letter.submission.user.kependudukan?.nama || letter.submission.user.nama,
+              nik: letter.submission.user.nik,
+            }
+          : undefined,
+        lingkungan: letter.submission.lingkungan
+          ? {
+              id: letter.submission.lingkungan.id.toString(),
+              nama: letter.submission.lingkungan.nama,
+            }
+          : undefined,
+      }
+    : undefined,
+});

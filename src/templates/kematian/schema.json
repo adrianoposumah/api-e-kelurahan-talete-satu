@@ -1,0 +1,51 @@
+{
+  "type": "kematian",
+  "name": "Surat Keterangan Kematian",
+  "description": "Surat keterangan kematian untuk keperluan administrasi",
+  "requiredFields": [
+    {
+      "name": "nama_almarhum",
+      "label": "Nama Almarhum/Almarhumah",
+      "type": "text",
+      "required": true,
+      "maxLength": 100
+    },
+    {
+      "name": "nik_almarhum",
+      "label": "NIK Almarhum/Almarhumah",
+      "type": "text",
+      "required": true,
+      "length": 16
+    },
+    {
+      "name": "tanggal_meninggal",
+      "label": "Tanggal Meninggal",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "tempat_meninggal",
+      "label": "Tempat Meninggal",
+      "type": "text",
+      "required": true,
+      "maxLength": 200
+    },
+    {
+      "name": "sebab_kematian",
+      "label": "Sebab Kematian",
+      "type": "text",
+      "required": true,
+      "maxLength": 300
+    },
+    {
+      "name": "hubungan_pelapor",
+      "label": "Hubungan Pelapor dengan Almarhum",
+      "type": "text",
+      "required": true,
+      "maxLength": 50
+    }
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "nik", "alamat", "lingkungan"],
+  "letterPrefix": "K.15",
+  "validityDays": null
+}
