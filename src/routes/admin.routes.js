@@ -31,8 +31,14 @@ router.patch('/validate-requests/:id', adminController.processValidateRequest.bi
 // GET /admin/lurah - Get current Lurah
 router.get('/lurah', adminController.getCurrentLurah.bind(adminController));
 
+// GET /admin/lurah/history - Get Lurah history
+router.get('/lurah/history', adminController.getLurahHistory.bind(adminController));
+
 // POST /admin/lurah - Set a user as Lurah (demotes current Lurah if exists)
 router.post('/lurah', adminController.setLurah.bind(adminController));
+
+// PATCH /admin/lurah - Update current Lurah profile
+router.patch('/lurah', adminController.updateLurahProfile.bind(adminController));
 
 // DELETE /admin/lurah - Demote current Lurah to warga
 router.delete('/lurah', adminController.demoteLurah.bind(adminController));

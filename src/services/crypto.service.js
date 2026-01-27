@@ -82,18 +82,22 @@ class CryptoService {
    * @returns {Promise<object>} Created/updated key record
    */
   async setLurahKeyPair(lurahUserId, passphrase) {
-    // Verify user is a lurah
-    const user = await prisma.user.findUnique({
-      where: { id: BigInt(lurahUserId) },
+    // Verify user is a lurah with active profile
+    const lurahProfile = await prisma.lurahProfile.findFirst({
+      where: {
+        userId: BigInt(lurahUserId),
+        isActive: true,
+      },
+      include: { user: true },
     });
 
-    if (!user) {
-      const error = new Error('User tidak ditemukan');
+    if (!lurahProfile) {
+      const error = new Error('Lurah profile tidak ditemukan atau tidak aktif');
       error.code = 'NOT_FOUND';
       throw error;
     }
 
-    if (user.role !== 'lurah') {
+    if (lurahProfile.user.role !== 'lurah') {
       const error = new Error('User bukan Lurah');
       error.code = 'FORBIDDEN';
       throw error;
@@ -105,16 +109,16 @@ class CryptoService {
     // Encrypt private key
     const encryptedPrivateKey = this.encryptPrivateKey(privateKey, passphrase);
 
-    // Deactivate existing keys
+    // Deactivate existing keys for this profile
     await prisma.lurahKey.updateMany({
-      where: { lurahUserId: BigInt(lurahUserId) },
+      where: { lurahProfileId: lurahProfile.id },
       data: { isActive: false },
     });
 
     // Create new key record
     const keyRecord = await prisma.lurahKey.create({
       data: {
-        lurahUserId: BigInt(lurahUserId),
+        lurahProfileId: lurahProfile.id,
         publicKey,
         privateKey: encryptedPrivateKey,
         algorithm: this.algorithm,
@@ -131,14 +135,14 @@ class CryptoService {
   }
 
   /**
-   * Get active key for a Lurah
-   * @param {string} lurahUserId - Lurah user ID
+   * Get active key for a Lurah profile
+   * @param {string} lurahProfileId - Lurah profile ID
    * @returns {Promise<object>} Key record
    */
-  async getLurahKey(lurahUserId) {
+  async getLurahKey(lurahProfileId) {
     const keyRecord = await prisma.lurahKey.findFirst({
       where: {
-        lurahUserId: BigInt(lurahUserId),
+        lurahProfileId: BigInt(lurahProfileId),
         isActive: true,
       },
     });
@@ -153,12 +157,21 @@ class CryptoService {
   }
 
   /**
-   * Get any active Lurah key
-   * @returns {Promise<object>} Key record with lurah user info
+   * Get any active Lurah key with profile info
+   * @returns {Promise<object>} Key record with lurah profile info
    */
   async getActiveLurahKey() {
     const keyRecord = await prisma.lurahKey.findFirst({
       where: { isActive: true },
+      include: {
+        lurahProfile: {
+          include: {
+            user: {
+              include: { kependudukan: true },
+            },
+          },
+        },
+      },
     });
 
     if (!keyRecord) {
@@ -167,13 +180,7 @@ class CryptoService {
       throw error;
     }
 
-    // Get lurah user info
-    const lurah = await prisma.user.findUnique({
-      where: { id: keyRecord.lurahUserId },
-      include: { kependudukan: true },
-    });
-
-    return { keyRecord, lurah };
+    return { keyRecord, lurahProfile: keyRecord.lurahProfile };
   }
 
   /**
@@ -243,13 +250,13 @@ class CryptoService {
   /**
    * Create digital signature for a letter
    * @param {object} letterData - Letter data to sign
-   * @param {string} lurahUserId - Lurah user ID
+   * @param {string} lurahProfileId - Lurah profile ID
    * @param {string} passphrase - Passphrase for private key
    * @returns {Promise<object>} Signature data
    */
-  async createLetterSignature(letterData, lurahUserId, passphrase) {
+  async createLetterSignature(letterData, lurahProfileId, passphrase) {
     // Get lurah's key
-    const keyRecord = await this.getLurahKey(lurahUserId);
+    const keyRecord = await this.getLurahKey(lurahProfileId);
 
     // Decrypt private key
     const privateKey = this.decryptPrivateKey(keyRecord.privateKey, passphrase);
@@ -268,7 +275,7 @@ class CryptoService {
       canonicalHash,
       signature,
       algorithm: keyRecord.algorithm,
-      signedBy: lurahUserId,
+      signedBy: lurahProfileId,
     };
   }
 

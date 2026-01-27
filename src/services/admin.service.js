@@ -182,29 +182,32 @@ class AdminService {
   // ==================== LURAH MANAGEMENT ====================
 
   /**
-   * Get current Lurah
-   * @returns {Promise<object|null>} Current Lurah user or null
+   * Get current active Lurah with profile
+   * @returns {Promise<object|null>} Current Lurah with profile or null
    */
   async getCurrentLurah() {
-    const lurah = await prisma.user.findFirst({
-      where: { role: 'lurah' },
-      include: { kependudukan: true },
+    const lurahProfile = await prisma.lurahProfile.findFirst({
+      where: { isActive: true },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+      },
     });
 
-    return lurah;
+    return lurahProfile;
   }
 
   /**
-   * Set a user as Lurah (only one Lurah allowed)
-   * @param {string} userId - User ID to promote to Lurah
-   * @returns {Promise<object>} Updated user
+   * Set a user as Lurah with profile information
+   * @param {object} data - Lurah data
+   * @returns {Promise<object>} Created/updated Lurah profile
    * @throws {Error} If user not found or validation fails
    */
-  async setLurah(userId) {
+  async setLurah({ userId, nip, namaLengkap, jabatan, pangkat, mulaiMenjabat }) {
     // Find the user to promote
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      include: { kependudukan: true },
     });
 
     if (!user) {
@@ -225,37 +228,122 @@ class AdminService {
       throw error;
     }
 
-    if (!user.isValidate) {
-      const error = new Error('User harus tervalidasi terlebih dahulu');
-      error.code = 'BAD_REQUEST';
+    // Check if NIP already exists
+    const existingNip = await prisma.lurahProfile.findUnique({
+      where: { nip },
+    });
+
+    if (existingNip && existingNip.userId !== BigInt(userId)) {
+      const error = new Error('NIP sudah digunakan oleh Lurah lain');
+      error.code = 'CONFLICT';
       throw error;
     }
 
     // Use transaction to demote current Lurah and promote new one
     const result = await prisma.$transaction(async (tx) => {
-      // Find and demote current Lurah (if exists)
-      const currentLurah = await tx.user.findFirst({
-        where: { role: 'lurah' },
+      let previousLurah = null;
+
+      // Find and demote current active Lurah (if exists)
+      const currentLurahProfile = await tx.lurahProfile.findFirst({
+        where: { isActive: true },
+        include: { user: true },
       });
 
-      if (currentLurah) {
+      if (currentLurahProfile) {
+        previousLurah = currentLurahProfile.user;
+
+        // Deactivate current Lurah profile
+        await tx.lurahProfile.update({
+          where: { id: currentLurahProfile.id },
+          data: {
+            isActive: false,
+            akhirMenjabat: new Date(),
+          },
+        });
+
+        // Demote current Lurah to warga
         await tx.user.update({
-          where: { id: currentLurah.id },
+          where: { id: currentLurahProfile.userId },
           data: { role: 'warga' },
         });
       }
 
       // Promote new user to Lurah
-      const newLurah = await tx.user.update({
+      await tx.user.update({
         where: { id: BigInt(userId) },
         data: { role: 'lurah' },
-        include: { kependudukan: true },
       });
 
-      return { newLurah, previousLurah: currentLurah };
+      // Create Lurah profile
+      const newLurahProfile = await tx.lurahProfile.create({
+        data: {
+          userId: BigInt(userId),
+          nip,
+          namaLengkap,
+          jabatan: jabatan || 'Lurah',
+          pangkat: pangkat || null,
+          mulaiMenjabat: new Date(mulaiMenjabat),
+          isActive: true,
+        },
+        include: {
+          user: {
+            include: { kependudukan: true },
+          },
+        },
+      });
+
+      return { newLurahProfile, previousLurah };
     });
 
     return result;
+  }
+
+  /**
+   * Update Lurah profile information
+   * @param {object} data - Update data
+   * @returns {Promise<object>} Updated Lurah profile
+   * @throws {Error} If no active Lurah exists
+   */
+  async updateLurahProfile({ nip, namaLengkap, jabatan, pangkat }) {
+    const currentLurahProfile = await prisma.lurahProfile.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!currentLurahProfile) {
+      const error = new Error('Tidak ada Lurah yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    // Check if new NIP already exists (if changing)
+    if (nip && nip !== currentLurahProfile.nip) {
+      const existingNip = await prisma.lurahProfile.findUnique({
+        where: { nip },
+      });
+
+      if (existingNip) {
+        const error = new Error('NIP sudah digunakan');
+        error.code = 'CONFLICT';
+        throw error;
+      }
+    }
+
+    const updatedProfile = await prisma.lurahProfile.update({
+      where: { id: currentLurahProfile.id },
+      data: {
+        ...(nip && { nip }),
+        ...(namaLengkap && { namaLengkap }),
+        ...(jabatan && { jabatan }),
+        ...(pangkat !== undefined && { pangkat }),
+      },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+      },
+    });
+
+    return updatedProfile;
   }
 
   /**
@@ -264,23 +352,53 @@ class AdminService {
    * @throws {Error} If no Lurah exists
    */
   async demoteLurah() {
-    const currentLurah = await prisma.user.findFirst({
-      where: { role: 'lurah' },
+    const currentLurahProfile = await prisma.lurahProfile.findFirst({
+      where: { isActive: true },
+      include: { user: true },
     });
 
-    if (!currentLurah) {
+    if (!currentLurahProfile) {
       const error = new Error('Tidak ada Lurah yang aktif');
       error.code = 'NOT_FOUND';
       throw error;
     }
 
-    const demotedUser = await prisma.user.update({
-      where: { id: currentLurah.id },
-      data: { role: 'warga' },
-      include: { kependudukan: true },
+    const result = await prisma.$transaction(async (tx) => {
+      // Deactivate Lurah profile
+      await tx.lurahProfile.update({
+        where: { id: currentLurahProfile.id },
+        data: {
+          isActive: false,
+          akhirMenjabat: new Date(),
+        },
+      });
+
+      // Demote user to warga
+      const demotedUser = await tx.user.update({
+        where: { id: currentLurahProfile.userId },
+        data: { role: 'warga' },
+        include: { kependudukan: true },
+      });
+
+      return demotedUser;
     });
 
-    return demotedUser;
+    return result;
+  }
+
+  /**
+   * Get Lurah history (all Lurah profiles)
+   * @returns {Promise<object[]>} List of Lurah profiles
+   */
+  async getLurahHistory() {
+    const profiles = await prisma.lurahProfile.findMany({
+      orderBy: { mulaiMenjabat: 'desc' },
+      include: {
+        user: true,
+      },
+    });
+
+    return profiles;
   }
 }
 

@@ -61,6 +61,7 @@ model User {
   lingkunganKepling LingkunganKepling[]
   submissions    Submission[]
   approvals      SubmissionApproval[]
+  lurahProfile   LurahProfile?
 
   @@map("users")
 }
@@ -264,16 +265,40 @@ model SubmissionApproval {
 
 // ==================== LETTER ISSUANCE ====================
 
+// Lurah profile - stores Lurah-specific information (NIP, etc.)
+model LurahProfile {
+  id            BigInt    @id @default(autoincrement()) @db.BigInt
+  userId        BigInt    @unique @map("user_id") @db.BigInt
+  nip           String    @unique @db.VarChar(18) // NIP format: 18 digits
+  namaLengkap   String    @map("nama_lengkap") @db.VarChar(100)
+  jabatan       String    @default("Lurah") @db.VarChar(100)
+  pangkat       String?   @db.VarChar(100) // Golongan/Pangkat
+  mulaiMenjabat DateTime  @map("mulai_menjabat") @db.Date
+  akhirMenjabat DateTime? @map("akhir_menjabat") @db.Date
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lurahKeys     LurahKey[]
+
+  @@map("lurah_profiles")
+}
+
 // Lurah key pairs for digital signatures
 model LurahKey {
-  id            BigInt   @id @default(autoincrement()) @db.BigInt
-  lurahUserId   BigInt   @unique @map("lurah_user_id") @db.BigInt
-  publicKey     String   @map("public_key") @db.Text
-  privateKey    String   @map("private_key") @db.Text // Encrypted
-  algorithm     String   @default("RSA-SHA256") @db.VarChar(50)
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              BigInt        @id @default(autoincrement()) @db.BigInt
+  lurahProfileId  BigInt        @map("lurah_profile_id") @db.BigInt
+  publicKey       String        @map("public_key") @db.Text
+  privateKey      String        @map("private_key") @db.Text // Encrypted
+  algorithm       String        @default("RSA-SHA256") @db.VarChar(50)
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  lurahProfile    LurahProfile  @relation(fields: [lurahProfileId], references: [id], onDelete: Cascade)
 
   @@map("lurah_keys")
 }

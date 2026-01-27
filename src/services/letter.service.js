@@ -52,19 +52,13 @@ class LetterService {
    * @returns {Promise<object>} Lurah info
    */
   async getLurahInfo() {
-    const { keyRecord, lurah } = await cryptoService.getActiveLurahKey();
-
-    if (!lurah.kependudukan) {
-      const error = new Error('Data kependudukan Lurah tidak ditemukan');
-      error.code = 'NOT_FOUND';
-      throw error;
-    }
+    const { keyRecord, lurahProfile } = await cryptoService.getActiveLurahKey();
 
     return {
       keyRecord,
-      lurah,
-      lurahName: lurah.kependudukan.nama,
-      lurahNip: lurah.nik || '-', // Using NIK as placeholder for NIP
+      lurahProfile,
+      lurahName: lurahProfile.namaLengkap,
+      lurahNip: lurahProfile.nip,
     };
   }
 
@@ -152,8 +146,8 @@ class LetterService {
       issuedBy: lurahName,
     };
 
-    // Create digital signature
-    const signatureData = await cryptoService.createLetterSignature(canonicalInput, keyRecord.lurahUserId.toString(), passphrase);
+    // Create digital signature (using lurahProfile.id)
+    const signatureData = await cryptoService.createLetterSignature(canonicalInput, keyRecord.lurahProfileId.toString(), passphrase);
 
     // Render HTML template
     const html = await templateService.renderTemplate(submission.type, templateData);
@@ -186,7 +180,7 @@ class LetterService {
           canonicalData: signatureData.canonicalData,
           canonicalHash: signatureData.canonicalHash,
           signature: signatureData.signature,
-          signedBy: keyRecord.lurahUserId,
+          signedBy: keyRecord.lurahProfileId, // Store lurahProfile ID
           pdfPath: pdfResult.filePath,
           expiresAt,
         },
@@ -248,10 +242,10 @@ class LetterService {
   async verifyLetter(verificationCode) {
     const letter = await this.getLetterByVerificationCode(verificationCode);
 
-    // Get the public key used for signing
+    // Get the public key used for signing (signedBy now stores lurahProfileId)
     const keyRecord = await prisma.lurahKey.findFirst({
       where: {
-        lurahUserId: letter.signedBy,
+        lurahProfileId: letter.signedBy,
       },
       orderBy: { createdAt: 'desc' },
     });
