@@ -310,6 +310,7 @@ model IssuedLetter {
   letterNumber    String     @unique @map("letter_number") @db.VarChar(100)
   verificationCode String    @unique @map("verification_code") @db.VarChar(50)
   type            SubmissionType
+  keterangan      String?    @db.Text // Admin description/notes about the letter
   
   // Letter content
   canonicalData   String     @map("canonical_data") @db.Text

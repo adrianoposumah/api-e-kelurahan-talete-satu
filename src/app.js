@@ -27,6 +27,9 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static assets (logos, etc.)
 app.use('/assets', express.static(join(__dirname, '..', 'public', 'assets')));
 
+// Serve public letters (generated PDFs)
+app.use('/public/letters', express.static(join(__dirname, '..', 'public', 'letters')));
+
 // Swagger documentation
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 

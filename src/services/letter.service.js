@@ -63,11 +63,29 @@ class LetterService {
   }
 
   /**
+   * Validate letter number format and uniqueness
+   * @param {string} letterNumber - Letter number from admin
+   * @returns {Promise<void>}
+   */
+  async validateLetterNumber(letterNumber) {
+    // Check if letter number already exists
+    const existing = await prisma.issuedLetter.findUnique({
+      where: { letterNumber },
+    });
+
+    if (existing) {
+      const error = new Error('Nomor surat sudah digunakan');
+      error.code = 'CONFLICT';
+      throw error;
+    }
+  }
+
+  /**
    * Issue a letter for an approved submission
    * @param {object} params - Issue parameters
    * @returns {Promise<object>} Issued letter
    */
-  async issueLetter({ submissionId, passphrase }) {
+  async issueLetter({ submissionId, passphrase, letterNumber, keterangan }) {
     // Get submission with all relations
     const submission = await prisma.submission.findUnique({
       where: { id: BigInt(submissionId) },
@@ -109,11 +127,18 @@ class LetterService {
       throw error;
     }
 
+    // Validate letter number from admin
+    if (!letterNumber) {
+      const error = new Error('Nomor surat wajib diisi');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    // Check letter number uniqueness
+    await this.validateLetterNumber(letterNumber);
+
     // Get template schema
     const schema = await templateService.getSchema(submission.type);
-
-    // Generate letter number
-    const letterNumber = await this.generateLetterNumber(submission.type, schema);
 
     // Generate verification code
     const verificationCode = uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase();
@@ -177,11 +202,12 @@ class LetterService {
           letterNumber,
           verificationCode,
           type: submission.type,
+          keterangan: keterangan || null,
           canonicalData: signatureData.canonicalData,
           canonicalHash: signatureData.canonicalHash,
           signature: signatureData.signature,
           signedBy: keyRecord.lurahProfileId, // Store lurahProfile ID
-          pdfPath: pdfResult.filePath,
+          pdfPath: pdfResult.relativePath, // Store relative path for public access
           expiresAt,
         },
       });
@@ -200,7 +226,7 @@ class LetterService {
       letterNumber,
       verificationCode,
       verificationUrl,
-      pdfPath: pdfResult.filePath,
+      pdfPath: pdfResult.relativePath,
       expiresAt,
     };
   }

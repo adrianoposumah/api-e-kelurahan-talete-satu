@@ -7,7 +7,7 @@ import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STORAGE_DIR = join(__dirname, '..', '..', 'storage', 'letters');
+const PUBLIC_DIR = join(__dirname, '..', '..', 'public', 'letters');
 
 /**
  * PDF Service - Handles PDF generation with QR codes and metadata
@@ -52,12 +52,12 @@ class PdfService {
   }
 
   /**
-   * Ensure storage directory exists
+   * Ensure public directory exists
    * @returns {Promise<void>}
    */
-  async ensureStorageDir() {
-    if (!existsSync(STORAGE_DIR)) {
-      await mkdir(STORAGE_DIR, { recursive: true });
+  async ensurePublicDir() {
+    if (!existsSync(PUBLIC_DIR)) {
+      await mkdir(PUBLIC_DIR, { recursive: true });
     }
   }
 
@@ -133,18 +133,24 @@ class PdfService {
   }
 
   /**
-   * Save PDF to storage
+   * Save PDF to public folder
    * @param {Buffer} pdfBuffer - PDF buffer
    * @param {string} filename - Filename without extension
-   * @returns {Promise<string>} File path
+   * @returns {Promise<object>} File paths (absolute and relative)
    */
   async savePdf(pdfBuffer, filename) {
-    await this.ensureStorageDir();
+    await this.ensurePublicDir();
 
-    const filePath = join(STORAGE_DIR, `${filename}.pdf`);
-    await writeFile(filePath, pdfBuffer);
+    const absolutePath = join(PUBLIC_DIR, `${filename}.pdf`);
+    await writeFile(absolutePath, pdfBuffer);
 
-    return filePath;
+    // Return relative path for database storage (for public access)
+    const relativePath = `/public/letters/${filename}.pdf`;
+
+    return {
+      absolutePath,
+      relativePath,
+    };
   }
 
   /**
@@ -175,11 +181,12 @@ class PdfService {
     // Generate filename from verification code
     const filename = `letter_${verificationCode}`;
 
-    // Save PDF
-    const filePath = await this.savePdf(pdfBuffer, filename);
+    // Save PDF to public folder
+    const { absolutePath, relativePath } = await this.savePdf(pdfBuffer, filename);
 
     return {
-      filePath,
+      absolutePath,
+      relativePath, // This is what gets stored in database
       filename: `${filename}.pdf`,
       qrCodeData,
       size: pdfBuffer.length,
@@ -192,7 +199,7 @@ class PdfService {
    * @returns {string} File path
    */
   getPdfPath(verificationCode) {
-    return join(STORAGE_DIR, `letter_${verificationCode}.pdf`);
+    return join(PUBLIC_DIR, `letter_${verificationCode}.pdf`);
   }
 
   /**
