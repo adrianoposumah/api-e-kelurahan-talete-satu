@@ -7,14 +7,6 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// ==================== STATIC ROUTES FIRST (before :id param routes) ====================
-
-// GET /submissions/kepling/list - Get submissions for kepling's lingkungan
-router.get('/kepling/list', requireRole('kepling'), submissionController.getSubmissionsForKepling.bind(submissionController));
-
-// GET /submissions/lurah/list - Get all submissions for lurah
-router.get('/lurah/list', requireRole('lurah'), submissionController.getSubmissionsForLurah.bind(submissionController));
-
 // ==================== CITIZEN (WARGA) ROUTES ====================
 
 // POST /submissions - Create a new submission (warga only)
@@ -34,6 +26,9 @@ router.delete('/:id', requireRole('warga'), submissionController.deleteSubmissio
 
 // ==================== KEPLING ROUTES ====================
 
+// GET /submissions/kepling/list - Get submissions for kepling's lingkungan
+router.get('/kepling/list', requireRole('kepling'), submissionController.getSubmissionsForKepling.bind(submissionController));
+
 // PATCH /submissions/:id/documents/:documentId/verify - Verify document
 router.patch('/:id/documents/:documentId/verify', requireRole('kepling'), submissionController.verifyDocument.bind(submissionController));
 
@@ -44,6 +39,9 @@ router.post('/:id/kepling/approve', requireRole('kepling'), submissionController
 router.post('/:id/kepling/reject', requireRole('kepling'), submissionController.rejectByKepling.bind(submissionController));
 
 // ==================== LURAH ROUTES ====================
+
+// GET /submissions/lurah/list - Get all submissions for lurah
+router.get('/lurah/list', requireRole('lurah'), submissionController.getSubmissionsForLurah.bind(submissionController));
 
 // POST /submissions/:id/lurah/approve - Approve by lurah
 router.post('/:id/lurah/approve', requireRole('lurah'), submissionController.approveByLurah.bind(submissionController));

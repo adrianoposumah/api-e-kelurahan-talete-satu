@@ -178,6 +178,110 @@ class AdminService {
 
     return result;
   }
+
+  // ==================== LURAH MANAGEMENT ====================
+
+  /**
+   * Get current Lurah
+   * @returns {Promise<object|null>} Current Lurah user or null
+   */
+  async getCurrentLurah() {
+    const lurah = await prisma.user.findFirst({
+      where: { role: 'lurah' },
+      include: { kependudukan: true },
+    });
+
+    return lurah;
+  }
+
+  /**
+   * Set a user as Lurah (only one Lurah allowed)
+   * @param {string} userId - User ID to promote to Lurah
+   * @returns {Promise<object>} Updated user
+   * @throws {Error} If user not found or validation fails
+   */
+  async setLurah(userId) {
+    // Find the user to promote
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      include: { kependudukan: true },
+    });
+
+    if (!user) {
+      const error = new Error('User tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (user.role === 'lurah') {
+      const error = new Error('User ini sudah menjadi Lurah');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (user.role === 'admin') {
+      const error = new Error('Admin tidak dapat dijadikan Lurah');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (!user.isValidate) {
+      const error = new Error('User harus tervalidasi terlebih dahulu');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    // Use transaction to demote current Lurah and promote new one
+    const result = await prisma.$transaction(async (tx) => {
+      // Find and demote current Lurah (if exists)
+      const currentLurah = await tx.user.findFirst({
+        where: { role: 'lurah' },
+      });
+
+      if (currentLurah) {
+        await tx.user.update({
+          where: { id: currentLurah.id },
+          data: { role: 'warga' },
+        });
+      }
+
+      // Promote new user to Lurah
+      const newLurah = await tx.user.update({
+        where: { id: BigInt(userId) },
+        data: { role: 'lurah' },
+        include: { kependudukan: true },
+      });
+
+      return { newLurah, previousLurah: currentLurah };
+    });
+
+    return result;
+  }
+
+  /**
+   * Demote current Lurah to warga
+   * @returns {Promise<object>} Demoted user
+   * @throws {Error} If no Lurah exists
+   */
+  async demoteLurah() {
+    const currentLurah = await prisma.user.findFirst({
+      where: { role: 'lurah' },
+    });
+
+    if (!currentLurah) {
+      const error = new Error('Tidak ada Lurah yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const demotedUser = await prisma.user.update({
+      where: { id: currentLurah.id },
+      data: { role: 'warga' },
+      include: { kependudukan: true },
+    });
+
+    return demotedUser;
+  }
 }
 
 export default new AdminService();
