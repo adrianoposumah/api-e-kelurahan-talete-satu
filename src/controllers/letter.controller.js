@@ -119,12 +119,13 @@ class LetterController {
 
   /**
    * POST /letters/issue/:submissionId - Issue a letter for submission
-   * Body: { passphrase, letter_number, keterangan }
+   * Body: { passphrase, nomor_surat, keterangan }
+   * Letter number format: {nomor_surat}/2009/D.15/I/{tahun}
    */
   async issueLetter(req, res, next) {
     try {
       const { submissionId } = req.params;
-      const { passphrase, letter_number, keterangan } = req.body;
+      const { passphrase, nomor_surat, keterangan } = req.body;
 
       // Validate required fields
       if (!passphrase) {
@@ -134,7 +135,7 @@ class LetterController {
         });
       }
 
-      if (!letter_number) {
+      if (!nomor_surat) {
         return res.status(400).json({
           error: 'Bad Request',
           message: 'Nomor surat wajib diisi',
@@ -144,7 +145,7 @@ class LetterController {
       const result = await letterService.issueLetter({
         submissionId,
         passphrase,
-        letterNumber: letter_number,
+        nomorSurat: nomor_surat,
         keterangan,
       });
 

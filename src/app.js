@@ -12,6 +12,7 @@ import adminRoutes from './routes/admin.routes.js';
 import lingkunganRoutes from './routes/lingkungan.routes.js';
 import submissionRoutes from './routes/submission.routes.js';
 import letterRoutes from './routes/letter.routes.js';
+import keyRoutes from './routes/key.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,6 +47,7 @@ app.use('/v1/admin', adminRoutes);
 app.use('/v1/lingkungan', lingkunganRoutes);
 app.use('/v1/submissions', submissionRoutes);
 app.use('/v1/letters', letterRoutes);
+app.use('/v1/keys', keyRoutes);
 
 // 404 handler
 app.use((req, res) => {

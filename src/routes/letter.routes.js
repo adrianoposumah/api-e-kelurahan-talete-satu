@@ -36,9 +36,6 @@ router.get('/:code', requireRole('warga', 'kepling', 'lurah', 'admin'), letterCo
 // GET /letters/admin/all - Get all issued letters
 router.get('/admin/all', requireRole('admin', 'lurah'), letterController.getAllLetters.bind(letterController));
 
-// POST /letters/keys/generate - Generate key pair for Lurah
-router.post('/keys/generate', requireRole('admin'), letterController.generateLurahKey.bind(letterController));
-
 // POST /letters/issue/:submissionId - Issue a letter
 router.post('/issue/:submissionId', requireRole('admin'), letterController.issueLetter.bind(letterController));
 

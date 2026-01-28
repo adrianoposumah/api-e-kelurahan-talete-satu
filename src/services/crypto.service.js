@@ -289,6 +289,69 @@ class CryptoService {
   verifyLetterSignature(canonicalData, signature, publicKey) {
     return this.verifySignature(canonicalData, signature, publicKey);
   }
+
+  /**
+   * Get Lurah key by user ID
+   * @param {string} userId - User ID
+   * @returns {Promise<object|null>} Key record or null
+   */
+  async getLurahKeyByUserId(userId) {
+    const lurahProfile = await prisma.lurahProfile.findFirst({
+      where: {
+        userId: BigInt(userId),
+        isActive: true,
+      },
+    });
+
+    if (!lurahProfile) {
+      const error = new Error('Lurah profile tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const keyRecord = await prisma.lurahKey.findFirst({
+      where: {
+        lurahProfileId: lurahProfile.id,
+        isActive: true,
+      },
+    });
+
+    return keyRecord;
+  }
+
+  /**
+   * Revoke Lurah's active key
+   * @param {string} userId - User ID
+   * @returns {Promise<void>}
+   */
+  async revokeLurahKey(userId) {
+    const lurahProfile = await prisma.lurahProfile.findFirst({
+      where: {
+        userId: BigInt(userId),
+        isActive: true,
+      },
+    });
+
+    if (!lurahProfile) {
+      const error = new Error('Lurah profile tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const result = await prisma.lurahKey.updateMany({
+      where: {
+        lurahProfileId: lurahProfile.id,
+        isActive: true,
+      },
+      data: { isActive: false },
+    });
+
+    if (result.count === 0) {
+      const error = new Error('Tidak ada key aktif untuk dinonaktifkan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+  }
 }
 
 export default new CryptoService();

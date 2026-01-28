@@ -63,8 +63,19 @@ class LetterService {
   }
 
   /**
+   * Build full letter number from admin input
+   * Format: {nomor_surat}/2009/D.15/I/{tahun}
+   * @param {string} nomorSurat - Custom number from admin
+   * @returns {string} Full letter number
+   */
+  buildLetterNumber(nomorSurat) {
+    const year = new Date().getFullYear();
+    return `${nomorSurat}/2009/D.15/I/${year}`;
+  }
+
+  /**
    * Validate letter number format and uniqueness
-   * @param {string} letterNumber - Letter number from admin
+   * @param {string} letterNumber - Full letter number
    * @returns {Promise<void>}
    */
   async validateLetterNumber(letterNumber) {
@@ -85,7 +96,7 @@ class LetterService {
    * @param {object} params - Issue parameters
    * @returns {Promise<object>} Issued letter
    */
-  async issueLetter({ submissionId, passphrase, letterNumber, keterangan }) {
+  async issueLetter({ submissionId, passphrase, nomorSurat, keterangan }) {
     // Get submission with all relations
     const submission = await prisma.submission.findUnique({
       where: { id: BigInt(submissionId) },
@@ -127,12 +138,15 @@ class LetterService {
       throw error;
     }
 
-    // Validate letter number from admin
-    if (!letterNumber) {
+    // Validate nomor surat from admin
+    if (!nomorSurat) {
       const error = new Error('Nomor surat wajib diisi');
       error.code = 'BAD_REQUEST';
       throw error;
     }
+
+    // Build full letter number: {nomor_surat}/2009/D.15/I/{tahun}
+    const letterNumber = this.buildLetterNumber(nomorSurat);
 
     // Check letter number uniqueness
     await this.validateLetterNumber(letterNumber);
