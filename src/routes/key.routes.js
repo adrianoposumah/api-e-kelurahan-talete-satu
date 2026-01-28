@@ -4,7 +4,17 @@ import { authMiddleware, requireRole } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-// All routes require authentication
+// ==================== PUBLIC ROUTES (for verification) ====================
+
+// GET /keys/public/current - Get current active Lurah's public key
+router.get('/public/current', keyController.getCurrentPublicKey.bind(keyController));
+
+// GET /keys/public/:verificationCode - Get public key for a specific letter
+router.get('/public/:verificationCode', keyController.getPublicKeyByLetter.bind(keyController));
+
+// ==================== AUTHENTICATED ROUTES ====================
+
+// Apply auth middleware for remaining routes
 router.use(authMiddleware);
 
 // ==================== LURAH KEY MANAGEMENT ====================

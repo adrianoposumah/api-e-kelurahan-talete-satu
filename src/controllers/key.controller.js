@@ -1,9 +1,104 @@
 import cryptoService from '../services/crypto.service.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Key Controller - Handles key management endpoints
  */
 class KeyController {
+  /**
+   * GET /keys/public/:verificationCode - Get public key for a letter (PUBLIC)
+   * Used for external signature verification
+   */
+  async getPublicKeyByLetter(req, res, next) {
+    try {
+      const { verificationCode } = req.params;
+
+      // Find the letter
+      const letter = await prisma.issuedLetter.findUnique({
+        where: { verificationCode },
+      });
+
+      if (!letter) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Surat tidak ditemukan',
+        });
+      }
+
+      // Get the key used to sign this letter
+      const keyRecord = await prisma.lurahKey.findFirst({
+        where: { lurahProfileId: letter.signedBy },
+        include: {
+          lurahProfile: {
+            select: {
+              namaLengkap: true,
+              nip: true,
+              jabatan: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!keyRecord) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Kunci publik tidak ditemukan',
+        });
+      }
+
+      res.json({
+        data: {
+          public_key: keyRecord.publicKey,
+          algorithm: keyRecord.algorithm,
+          signer: {
+            nama: keyRecord.lurahProfile.namaLengkap,
+            nip: keyRecord.lurahProfile.nip,
+            jabatan: keyRecord.lurahProfile.jabatan,
+          },
+          letter: {
+            letter_number: letter.letterNumber,
+            canonical_hash: letter.canonicalHash,
+            signature: letter.signature,
+            issued_at: letter.issuedAt,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /keys/public/current - Get current active Lurah's public key (PUBLIC)
+   */
+  async getCurrentPublicKey(req, res, next) {
+    try {
+      const result = await cryptoService.getActiveLurahKey();
+
+      res.json({
+        data: {
+          public_key: result.keyRecord.publicKey,
+          algorithm: result.keyRecord.algorithm,
+          signer: {
+            nama: result.lurahProfile.namaLengkap,
+            nip: result.lurahProfile.nip,
+            jabatan: result.lurahProfile.jabatan,
+          },
+          created_at: result.keyRecord.createdAt,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
   /**
    * POST /keys/generate - Generate key pair for logged-in Lurah
    * Only Lurah can generate their own keys

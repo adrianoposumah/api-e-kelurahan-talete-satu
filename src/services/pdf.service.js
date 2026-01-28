@@ -154,7 +154,18 @@ class PdfService {
   }
 
   /**
-   * Generate complete PDF for a letter
+   * Generate complete PDF for a letter with embedded cryptographic metadata
+   *
+   * PDF RENDERER RESPONSIBILITIES:
+   * - Embed signature artifacts from crypto module
+   * - Generate QR code for verification
+   * - Save PDF to storage
+   *
+   * This module must NOT:
+   * - Perform hashing or signing
+   * - Access private keys
+   * - Build canonical data
+   *
    * @param {object} params - PDF generation parameters
    * @returns {Promise<object>} PDF generation result
    */
@@ -165,17 +176,25 @@ class PdfService {
     // Replace QR code placeholder in HTML
     const htmlWithQr = html.replace('{{QR_CODE_DATA}}', qrCodeData);
 
-    // Generate PDF
+    // Embed cryptographic metadata as per specification
     const pdfBuffer = await this.createPdfWithMetadata(htmlWithQr, {
+      // Standard PDF metadata
       title: `Surat ${letterNumber}`,
       subject: 'Surat Elektronik Kelurahan Talete Satu',
       author: 'e-Kelurahan Talete Satu',
       creator: 'e-Kelurahan System',
       keywords: [letterNumber, verificationCode].join(', '),
-      // Custom metadata for signature
-      signatureAlgorithm: signatureData?.algorithm || 'SHA256WithRSA',
-      signatureValue: signatureData?.signature || '',
-      canonicalHash: signatureData?.canonicalHash || '',
+
+      // Cryptographic metadata (from crypto module)
+      SignatureAlgorithm: signatureData?.algorithm || 'SHA256withRSA',
+      CanonicalHash: signatureData?.canonicalHash || '',
+      SignatureValue: signatureData?.signature || '',
+      VerificationCode: verificationCode,
+      PublicKeyFingerprint: signatureData?.publicKeyFingerprint || '',
+      IssuedDate: new Date().toISOString(),
+
+      // Canonical payload (base64-encoded for embedding)
+      CanonicalPayload: signatureData?.canonicalData ? Buffer.from(signatureData.canonicalData).toString('base64') : '',
     });
 
     // Generate filename from verification code

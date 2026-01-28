@@ -173,20 +173,38 @@ class LetterService {
       verificationUrl,
     });
 
-    // Build canonical data for signing
-    const canonicalInput = {
+    // ==================== CRYPTOGRAPHIC SIGNING PHASE ====================
+    // Following strict separation of concerns
+
+    // Prepare letter data for canonical construction
+    const letterData = {
+      type: submission.type,
+      nomorSurat: letterNumber,
       nama: submission.user.kependudukan.nama,
       nik: submission.user.kependudukan.nik,
-      jenisKelamin: submission.user.kependudukan.jenisKelamin,
+      tanggalLahir: submission.user.kependudukan.tanggalLahir ? new Date(submission.user.kependudukan.tanggalLahir).toISOString().split('T')[0] : null,
       lingkungan: submission.lingkungan.nama,
-      nomorSurat: letterNumber,
-      type: submission.type,
-      tanggal: new Date().toISOString().split('T')[0],
-      issuedBy: lurahName,
+      tujuan: submission.payload?.tujuan || null,
     };
 
-    // Create digital signature (using lurahProfile.id)
-    const signatureData = await cryptoService.createLetterSignature(canonicalInput, keyRecord.lurahProfileId.toString(), passphrase);
+    // Prepare issuer data
+    const issuerData = {
+      namaLurah: lurahName,
+      nipLurah: lurahNip,
+      kelurahan: 'Talete Satu',
+      kecamatan: 'Tomohon Tengah',
+      kota: 'Tomohon',
+    };
+
+    // Prepare metadata
+    const metadata = {
+      verificationCode,
+      issuedDate: new Date().toISOString(),
+    };
+
+    // Call cryptographic module to produce signature artifacts
+    // This module handles: canonical data, hashing, and signing
+    const signatureData = await cryptoService.createLetterSignature(letterData, issuerData, metadata, keyRecord.lurahProfileId.toString(), passphrase);
 
     // Render HTML template
     const html = await templateService.renderTemplate(submission.type, templateData);

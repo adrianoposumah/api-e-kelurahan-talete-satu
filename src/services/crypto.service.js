@@ -184,44 +184,72 @@ class CryptoService {
   }
 
   /**
-   * Build canonical data string from letter data
-   * @param {object} data - Letter data
-   * @returns {string} Canonical string
+   * Build canonical data in deterministic JSON format
+   * This follows the cryptographic module specification
+   * @param {object} letterData - Letter data
+   * @param {object} issuerData - Issuer (Lurah) data
+   * @param {object} metadata - Additional metadata
+   * @returns {object} Canonical data object
    */
-  buildCanonicalData(data) {
-    // Create deterministic canonical string
-    const fields = [
-      `nama=${data.nama}`,
-      `nik=${data.nik}`,
-      `jenis_kelamin=${data.jenisKelamin}`,
-      `lingkungan=${data.lingkungan}`,
-      `nomor_surat=${data.nomorSurat}`,
-      `type=${data.type}`,
-      `tanggal=${data.tanggal}`,
-      `issued_by=${data.issuedBy}`,
-    ];
+  buildCanonicalData(letterData, issuerData, metadata) {
+    // Create deterministic canonical structure
+    // Keys must be sorted for consistency
+    const canonical = {
+      version: '1.0',
+      type: letterData.type,
+      nomor_surat: letterData.nomorSurat,
+      nama: letterData.nama,
+      nik: letterData.nik,
+      tanggal_lahir: letterData.tanggalLahir || null,
+      lingkungan: letterData.lingkungan,
+      tujuan: letterData.tujuan || null,
+      issued_date: metadata.issuedDate,
+      issuer: {
+        nama_lurah: issuerData.namaLurah,
+        nip_lurah: issuerData.nipLurah,
+        kelurahan: issuerData.kelurahan || 'Talete Satu',
+        kecamatan: issuerData.kecamatan || 'Tomohon Tengah',
+        kota: issuerData.kota || 'Tomohon',
+      },
+      verification_code: metadata.verificationCode,
+      algorithm: 'SHA256withRSA',
+      public_key_fingerprint: metadata.publicKeyFingerprint,
+    };
 
-    return fields.join('\n');
+    // Convert to JSON string with sorted keys for deterministic output
+    return JSON.stringify(canonical, Object.keys(canonical).sort());
   }
 
   /**
-   * Hash data using SHA-256
-   * @param {string} data - Data to hash
-   * @returns {string} Hex-encoded hash
+   * Hash canonical data using SHA-256
+   * @param {string} canonicalData - Canonical data string
+   * @returns {string} Hex-encoded hash digest
    */
-  hashData(data) {
-    return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
+  hashCanonicalData(canonicalData) {
+    return crypto.createHash('sha256').update(canonicalData, 'utf8').digest('hex');
   }
 
   /**
-   * Sign data with private key
-   * @param {string} data - Data to sign
+   * Generate public key fingerprint (SHA-256 of public key)
+   * @param {string} publicKeyPem - Public key in PEM format
+   * @returns {string} Colon-separated hex fingerprint
+   */
+  generatePublicKeyFingerprint(publicKeyPem) {
+    const hash = crypto.createHash('sha256').update(publicKeyPem, 'utf8').digest('hex');
+    // Format as colon-separated pairs: 49:AE:33:BE:...
+    return hash.match(/.{2}/g).join(':').toUpperCase();
+  }
+
+  /**
+   * Sign digest with private key
+   * This is the core cryptographic signing operation
+   * @param {string} digest - Hex-encoded hash digest
    * @param {string} privateKeyPem - Private key in PEM format
    * @returns {string} Base64-encoded signature
    */
-  signData(data, privateKeyPem) {
+  signDigest(digest, privateKeyPem) {
     const sign = crypto.createSign('SHA256');
-    sign.update(data);
+    sign.update(digest, 'hex');
     sign.end();
 
     const signature = sign.sign(privateKeyPem, 'base64');
@@ -249,32 +277,58 @@ class CryptoService {
 
   /**
    * Create digital signature for a letter
-   * @param {object} letterData - Letter data to sign
-   * @param {string} lurahProfileId - Lurah profile ID
-   * @param {string} passphrase - Passphrase for private key
-   * @returns {Promise<object>} Signature data
+   *
+   * CRYPTOGRAPHIC MODULE RESPONSIBILITIES:
+   * 1. Build canonical data (deterministic JSON)
+   * 2. Generate SHA-256 digest
+   * 3. Sign digest with private key
+   * 4. Return signature artifacts
+   *
+   * This module must NOT:
+   * - Access HTTP/workflow logic
+   * - Generate letter numbers
+   * - Render PDFs
+   * - Update database state
+   *
+   * @param {object} letterData - Letter data fields
+   * @param {object} issuerData - Issuer (Lurah) data
+   * @param {object} metadata - Metadata (verification code, issued date, etc)
+   * @param {string} lurahProfileId - Lurah profile ID (for key lookup)
+   * @param {string} passphrase - Passphrase to decrypt private key
+   * @returns {Promise<object>} Signature artifacts
    */
-  async createLetterSignature(letterData, lurahProfileId, passphrase) {
-    // Get lurah's key
+  async createLetterSignature(letterData, issuerData, metadata, lurahProfileId, passphrase) {
+    // Step 1: Retrieve key pair from key manager
     const keyRecord = await this.getLurahKey(lurahProfileId);
 
-    // Decrypt private key
+    // Step 2: Decrypt private key using passphrase
     const privateKey = this.decryptPrivateKey(keyRecord.privateKey, passphrase);
 
-    // Build canonical data
-    const canonicalData = this.buildCanonicalData(letterData);
+    // Step 3: Generate public key fingerprint
+    const publicKeyFingerprint = this.generatePublicKeyFingerprint(keyRecord.publicKey);
 
-    // Hash canonical data
-    const canonicalHash = this.hashData(canonicalData);
+    // Add fingerprint to metadata
+    const enrichedMetadata = {
+      ...metadata,
+      publicKeyFingerprint,
+    };
 
-    // Sign the hash
-    const signature = this.signData(canonicalData, privateKey);
+    // Step 4: Build canonical data (deterministic JSON)
+    const canonicalData = this.buildCanonicalData(letterData, issuerData, enrichedMetadata);
 
+    // Step 5: Hash canonical data (SHA-256 digest)
+    const canonicalHash = this.hashCanonicalData(canonicalData);
+
+    // Step 6: Sign the digest with private key
+    const signature = this.signDigest(canonicalHash, privateKey);
+
+    // Step 7: Return signature artifacts (PDF renderer will embed these)
     return {
-      canonicalData,
-      canonicalHash,
-      signature,
-      algorithm: keyRecord.algorithm,
+      canonicalData, // Full canonical JSON
+      canonicalHash, // SHA-256 digest (hex)
+      signature, // Base64-encoded signature
+      algorithm: 'SHA256withRSA',
+      publicKeyFingerprint, // Fingerprint for verification
       signedBy: lurahProfileId,
     };
   }

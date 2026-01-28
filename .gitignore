@@ -4,3 +4,4 @@
 .env.production
 /src/generated/prisma
 /docs
+/public/letters/*
