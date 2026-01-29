@@ -1,0 +1,28 @@
+meta {
+  name: Set Issued & Generate Surat
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{url}}/v1/letters/issue/:submissionId
+  body: json
+  auth: inherit
+}
+
+params:path {
+  submissionId: 2
+}
+
+body:json {
+  {
+    "passphrase": "{{passphrase}}",
+    "nomor_surat": "002",
+    "keterangan": "Untuk keperluan administrasi bank"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

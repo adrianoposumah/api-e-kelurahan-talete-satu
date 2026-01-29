@@ -1,0 +1,16 @@
+meta {
+  name: [Admin] End Role Kepala Lingkungan
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{url}}/v1/lingkungan/kepling/3/end
+  body: json
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

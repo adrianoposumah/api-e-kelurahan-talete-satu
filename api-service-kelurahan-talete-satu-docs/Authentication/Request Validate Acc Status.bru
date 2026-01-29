@@ -1,0 +1,22 @@
+meta {
+  name: Request Validate Acc Status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{url}}/v1/validate-requests/me
+  body: none
+  auth: inherit
+}
+
+body:json {
+  {
+      "nik": "{{nik}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

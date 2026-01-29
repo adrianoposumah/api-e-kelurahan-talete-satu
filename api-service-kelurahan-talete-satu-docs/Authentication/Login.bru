@@ -1,0 +1,31 @@
+meta {
+  name: Login
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{url}}/v1/auth/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+      "no_hp": "{{no_hp}}",
+      "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  const data = res.body;
+  
+  bru.setEnvVar("access_token", data.access_token);
+  bru.setEnvVar("refresh_token", data.refresh_token);
+  
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

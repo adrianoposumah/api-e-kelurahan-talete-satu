@@ -1,0 +1,27 @@
+meta {
+  name: Set Lurah
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{url}}/v1/admin/lurah
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "user_id": 2,
+    "nip": "199001012020011001",
+    "nama_lengkap": "Dr. Budi Santoso, S.H., M.H.",
+    "jabatan": "Lurah Talete Satu",
+    "pangkat": "Penata Tk.I (III/d)",
+    "mulai_menjabat": "2026-01-01"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

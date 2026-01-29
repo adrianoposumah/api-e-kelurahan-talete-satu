@@ -1,0 +1,24 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{url}}/v1/auth/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+      "nama": "Lina Sari",
+      "no_hp": "{{no_hp}}",
+      "password": "{{password}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

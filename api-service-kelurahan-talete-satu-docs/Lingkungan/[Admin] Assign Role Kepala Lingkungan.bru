@@ -1,0 +1,24 @@
+meta {
+  name: [Admin] Assign Role Kepala Lingkungan
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{url}}/v1/lingkungan/kepling
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "userId": 3,
+    "lingkunganId": 1,
+    "mulai": "2024-01-26"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

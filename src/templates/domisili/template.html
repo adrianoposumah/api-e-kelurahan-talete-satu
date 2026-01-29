@@ -6,8 +6,8 @@
     <title>Surat Keterangan Domisili</title>
     <style>
       @page {
-        size: A4;
-        margin: 2cm 2.5cm;
+        size: F4;
+        margin: 1.5cm 2cm;
       }
 
       * {
@@ -39,8 +39,8 @@
       }
 
       .logo {
-        width: 80px;
-        height: 80px;
+        width: 120px;
+        height: 120px;
         margin-right: 20px;
       }
 
@@ -53,37 +53,40 @@
       .kop-text {
         text-align: center;
         flex: 1;
+        line-height: 1.05;
       }
 
       .kop-line-1 {
-        font-size: 14pt;
-        font-weight: 600;
+        font-size: 16pt;
+        font-weight: 500;
       }
 
       .kop-line-2 {
-        font-size: 16pt;
-        font-weight: bold;
-      }
-
-      .kop-line-3 {
         font-size: 18pt;
         font-weight: bold;
       }
 
+      .kop-line-3 {
+        font-size: 24pt;
+        font-weight: bold;
+      }
+
       .kop-line-4 {
-        font-size: 12pt;
+        font-size: 14pt;
         font-weight: normal;
       }
 
       .kop-line-5 {
         font-size: 14pt;
         font-weight: 600;
+        letter-spacing: 3px;
       }
 
       /* JUDUL SURAT */
       .judul-surat {
         text-align: center;
         margin: 30px 0 10px 0;
+        line-height: 1;
       }
 
       .judul-surat h1 {
@@ -138,6 +141,7 @@
         margin-top: 40px;
         display: flex;
         justify-content: flex-end;
+        line-height: 1.05;
       }
 
       .signature-box {
@@ -161,6 +165,7 @@
         width: 100px;
         height: 100px;
         margin: 10px auto;
+        border: 1px solid #000;
       }
 
       .qr-code img {
@@ -181,7 +186,7 @@
 
       /* FOOTER */
       .footer {
-        margin-top: 30px;
+        margin-top: 20px;
         text-align: center;
         font-size: 9pt;
         color: #666;
@@ -195,10 +200,10 @@
       <!-- KOP SURAT -->
       <div class="kop-surat">
         <div class="logo">
-          <img src="{{LOGO_URL}}" alt="Logo Kota Tomohon" />
+          <img src="../../../public/logo/logo-kotatomohon.png" alt="Logo Kota Tomohon" />
         </div>
         <div class="kop-text">
-          <div class="kop-line-1">PEMERINTAHAN KOTA TOMOHON</div>
+          <div class="kop-line-1">PEMERINTAH KOTA TOMOHON</div>
           <div class="kop-line-2">KECAMATAN TOMOHON TENGAH</div>
           <div class="kop-line-3">KELURAHAN TALETE SATU</div>
           <div class="kop-line-4">Jl. Sineleyan No.118 A Talete Satu</div>
@@ -254,7 +259,7 @@
           </div>
         </div>
 
-        <p class="paragraf">Adalah benar warga di wilayah kami dan berdomisili di Lingkungan {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon. Surat keterangan ini dibuat sebagai {{TUJUAN}}.</p>
+        <p class="paragraf">Adalah benar warga di wilayah kami dan berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon. Surat keterangan ini dibuat sebagai {{TUJUAN}}.</p>
 
         <p class="paragraf">Demikian surat keterangan ini kami buat, untuk dapat dipergunakan sebagaimana mestinya.</p>
       </div>

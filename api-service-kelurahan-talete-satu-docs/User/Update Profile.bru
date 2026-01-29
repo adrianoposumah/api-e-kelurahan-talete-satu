@@ -1,0 +1,22 @@
+meta {
+  name: Update Profile
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{url}}/v1/users/me
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+      "password": "{{password}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

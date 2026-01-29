@@ -1,0 +1,15 @@
+meta {
+  name: Get Lingkungan
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{url}}/v1/lingkungan
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

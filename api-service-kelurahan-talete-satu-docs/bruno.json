@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "api-service-kelurahan-talete-satu",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Get Lurah
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{url}}/v1/admin/lurah
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
