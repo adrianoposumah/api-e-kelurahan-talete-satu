@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 
-// Load .env first, then override with environment-specific file
 dotenv.config();
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile, override: true });

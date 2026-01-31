@@ -49,14 +49,11 @@ app.use('/v1/submissions', submissionRoutes);
 app.use('/v1/letters', letterRoutes);
 app.use('/v1/keys', keyRoutes);
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Error handler
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
+app.use((err, req, res) => {
   console.error(err.stack);
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
