@@ -23,18 +23,18 @@ router.use(authMiddleware);
 // ==================== WARGA ROUTES ====================
 
 // GET /letters - Get user's issued letters
-router.get('/', requireRole('warga', 'kepling', 'lurah', 'admin'), letterController.getMyLetters.bind(letterController));
+router.get('/', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getMyLetters.bind(letterController));
 
 // GET /letters/download/:code - Download letter PDF
-router.get('/download/:code', requireRole('warga', 'kepling', 'lurah', 'admin'), letterController.downloadLetter.bind(letterController));
+router.get('/download/:code', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.downloadLetter.bind(letterController));
 
 // GET /letters/:code - Get letter details by verification code
-router.get('/:code', requireRole('warga', 'kepling', 'lurah', 'admin'), letterController.getLetterByCode.bind(letterController));
+router.get('/:code', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getLetterByCode.bind(letterController));
 
 // ==================== ADMIN ROUTES ====================
 
 // GET /letters/admin/all - Get all issued letters
-router.get('/admin/all', requireRole('admin', 'lurah'), letterController.getAllLetters.bind(letterController));
+router.get('/admin/all', requireRole('admin', 'lurah', 'sekertaris'), letterController.getAllLetters.bind(letterController));
 
 // POST /letters/issue/:submissionId - Issue a letter
 router.post('/issue/:submissionId', requireRole('admin'), letterController.issueLetter.bind(letterController));

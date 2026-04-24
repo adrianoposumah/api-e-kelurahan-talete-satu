@@ -154,6 +154,7 @@ class SubmissionController {
       const isOwner = submission.userId.toString() === userId.toString();
       const isKepling = userRole === 'kepling';
       const isLurah = userRole === 'lurah';
+      const isSekertaris = userRole === 'sekertaris';
       const isAdmin = userRole === 'admin';
 
       // Kepling can only view submissions from their lingkungan
@@ -176,8 +177,8 @@ class SubmissionController {
         });
       }
 
-      // Lurah and Admin can view all
-      if (!isOwner && !isKepling && !isLurah && !isAdmin) {
+      // Lurah, Sekertaris, and Admin can view all
+      if (!isOwner && !isKepling && !isLurah && !isSekertaris && !isAdmin) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'Anda tidak memiliki akses ke submission ini',

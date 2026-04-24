@@ -1,5 +1,5 @@
 import adminService from '../services/admin.service.js';
-import { formatUserResponse, formatValidateRequestResponse, formatLurahProfileResponse } from '../utils/formatters.js';
+import { formatUserResponse, formatValidateRequestResponse, formatLurahProfileResponse, formatSekertarisProfileResponse } from '../utils/formatters.js';
 
 /**
  * Admin Controller - Handles admin request/response
@@ -42,6 +42,66 @@ class AdminController {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({
           error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /admin/users/:id/assign-staff - Assign staff role
+   */
+  async assignStaffRole(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const user = await adminService.assignStaffRole(id);
+
+      res.json({
+        message: `${user.nama} berhasil diberi role staff`,
+        data: formatUserResponse(user),
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /admin/users/:id/demote-staff - Demote staff role to warga
+   */
+  async demoteStaffRole(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const user = await adminService.demoteStaffRole(id);
+
+      res.json({
+        message: `${user.nama} berhasil diturunkan dari role staff menjadi warga`,
+        data: formatUserResponse(user),
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
           message: error.message,
         });
       }
@@ -318,6 +378,194 @@ class AdminController {
       res.json({
         message: 'Riwayat Lurah berhasil diambil',
         data: profiles.map(formatLurahProfileResponse),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== SEKERTARIS MANAGEMENT ====================
+
+  /**
+   * GET /admin/sekertaris - Get current Sekertaris
+   */
+  async getCurrentSekertaris(req, res, next) {
+    try {
+      const sekertarisProfile = await adminService.getCurrentSekertaris();
+
+      if (!sekertarisProfile) {
+        return res.json({
+          message: 'Belum ada Sekertaris yang ditunjuk',
+          data: null,
+        });
+      }
+
+      res.json({
+        message: 'Data Sekertaris berhasil diambil',
+        data: formatSekertarisProfileResponse(sekertarisProfile),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /admin/sekertaris - Set a user as Sekertaris
+   */
+  async setSekertaris(req, res, next) {
+    try {
+      const { user_id, nip, nama_lengkap, jabatan, pangkat, mulai_menjabat } = req.body;
+
+      if (!user_id) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'user_id wajib diisi',
+        });
+      }
+
+      if (!nip) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'NIP wajib diisi',
+        });
+      }
+
+      if (!nama_lengkap) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'nama_lengkap wajib diisi',
+        });
+      }
+
+      if (!mulai_menjabat) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'mulai_menjabat wajib diisi',
+        });
+      }
+
+      if (!/^\d{18}$/.test(nip)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'NIP harus terdiri dari 18 digit angka',
+        });
+      }
+
+      const { newSekertarisProfile, previousSekertaris } = await adminService.setSekertaris({
+        userId: user_id,
+        nip,
+        namaLengkap: nama_lengkap,
+        jabatan,
+        pangkat,
+        mulaiMenjabat: mulai_menjabat,
+      });
+
+      res.status(201).json({
+        message: previousSekertaris
+          ? `${newSekertarisProfile.namaLengkap} berhasil ditunjuk sebagai Sekertaris. ${previousSekertaris.nama} telah diturunkan menjadi warga.`
+          : `${newSekertarisProfile.namaLengkap} berhasil ditunjuk sebagai Sekertaris`,
+        data: {
+          sekertaris_profile: formatSekertarisProfileResponse(newSekertarisProfile),
+          previous_sekertaris: previousSekertaris ? formatUserResponse(previousSekertaris) : null,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /admin/sekertaris - Update current Sekertaris profile
+   */
+  async updateSekertarisProfile(req, res, next) {
+    try {
+      const { nip, nama_lengkap, jabatan, pangkat } = req.body;
+
+      if (nip && !/^\d{18}$/.test(nip)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'NIP harus terdiri dari 18 digit angka',
+        });
+      }
+
+      const updatedProfile = await adminService.updateSekertarisProfile({
+        nip,
+        namaLengkap: nama_lengkap,
+        jabatan,
+        pangkat,
+      });
+
+      res.json({
+        message: 'Profil Sekertaris berhasil diperbarui',
+        data: formatSekertarisProfileResponse(updatedProfile),
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /admin/sekertaris - Demote current Sekertaris
+   */
+  async demoteSekertaris(req, res, next) {
+    try {
+      const demotedUser = await adminService.demoteSekertaris();
+
+      res.json({
+        message: `${demotedUser.nama} telah diturunkan dari jabatan Sekertaris menjadi warga`,
+        data: formatUserResponse(demotedUser),
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * GET /admin/sekertaris/history - Get Sekertaris history
+   */
+  async getSekertarisHistory(req, res, next) {
+    try {
+      const profiles = await adminService.getSekertarisHistory();
+
+      res.json({
+        message: 'Riwayat Sekertaris berhasil diambil',
+        data: profiles.map(formatSekertarisProfileResponse),
       });
     } catch (error) {
       next(error);

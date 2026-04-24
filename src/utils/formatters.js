@@ -158,6 +158,26 @@ export const formatLurahProfileResponse = (profile) => ({
   user: profile.user ? formatUserResponse(profile.user) : undefined,
 });
 
+/**
+ * Format Sekertaris profile object for API response
+ * @param {object} profile - SekertarisProfile object from database
+ * @returns {object} Formatted Sekertaris profile object
+ */
+export const formatSekertarisProfileResponse = (profile) => ({
+  id: profile.id.toString(),
+  user_id: profile.userId.toString(),
+  nip: profile.nip,
+  nama_lengkap: profile.namaLengkap,
+  jabatan: profile.jabatan,
+  pangkat: profile.pangkat,
+  mulai_menjabat: profile.mulaiMenjabat,
+  akhir_menjabat: profile.akhirMenjabat,
+  is_active: profile.isActive,
+  created_at: profile.createdAt,
+  updated_at: profile.updatedAt,
+  user: profile.user ? formatUserResponse(profile.user) : undefined,
+});
+
 // ==================== SUBMISSION FORMATTERS ====================
 
 /**

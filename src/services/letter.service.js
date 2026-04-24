@@ -512,8 +512,9 @@ class LetterService {
     const isOwner = letter.submission.userId.toString() === userId.toString();
     const isAdmin = userRole === 'admin';
     const isLurah = userRole === 'lurah';
+    const isSekertaris = userRole === 'sekertaris';
 
-    if (!isOwner && !isAdmin && !isLurah) {
+    if (!isOwner && !isAdmin && !isLurah && !isSekertaris) {
       const error = new Error('Anda tidak memiliki akses ke surat ini');
       error.code = 'FORBIDDEN';
       throw error;

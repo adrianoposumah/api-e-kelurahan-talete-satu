@@ -16,7 +16,7 @@ router.post('/', requireRole('warga'), submissionController.createSubmission.bin
 router.get('/', requireRole('warga'), submissionController.getMySubmissions.bind(submissionController));
 
 // GET /submissions/:id - Get submission by ID (owner, kepling of lingkungan, lurah, admin)
-router.get('/:id', requireRole('warga', 'kepling', 'lurah', 'admin'), submissionController.getSubmissionById.bind(submissionController));
+router.get('/:id', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), submissionController.getSubmissionById.bind(submissionController));
 
 // POST /submissions/:id/documents - Add document to submission (owner only)
 router.post('/:id/documents', requireRole('warga'), submissionController.addDocument.bind(submissionController));
@@ -41,13 +41,13 @@ router.post('/:id/kepling/reject', requireRole('kepling'), submissionController.
 // ==================== LURAH ROUTES ====================
 
 // GET /submissions/lurah/list - Get all submissions for lurah
-router.get('/lurah/list', requireRole('lurah'), submissionController.getSubmissionsForLurah.bind(submissionController));
+router.get('/lurah/list', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionsForLurah.bind(submissionController));
 
 // POST /submissions/:id/lurah/approve - Approve by lurah
-router.post('/:id/lurah/approve', requireRole('lurah'), submissionController.approveByLurah.bind(submissionController));
+router.post('/:id/lurah/approve', requireRole('lurah', 'sekertaris'), submissionController.approveByLurah.bind(submissionController));
 
 // POST /submissions/:id/lurah/reject - Reject by lurah
-router.post('/:id/lurah/reject', requireRole('lurah'), submissionController.rejectByLurah.bind(submissionController));
+router.post('/:id/lurah/reject', requireRole('lurah', 'sekertaris'), submissionController.rejectByLurah.bind(submissionController));
 
 // ==================== ADMIN ROUTES ====================
 

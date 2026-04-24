@@ -12,13 +12,13 @@ router.use(authMiddleware);
 router.get('/', lingkunganController.getAllLingkungan.bind(lingkunganController));
 
 // GET /lingkungan/kepling - Get all kepling assignments
-router.get('/kepling', requireRole('admin', 'lurah'), lingkunganController.getAllKeplingAssignments.bind(lingkunganController));
+router.get('/kepling', requireRole('admin', 'lurah', 'sekertaris'), lingkunganController.getAllKeplingAssignments.bind(lingkunganController));
 
 // GET /lingkungan/kepling/active - Get all active kepling users
-router.get('/kepling/active', requireRole('admin', 'lurah'), lingkunganController.getActiveKeplings.bind(lingkunganController));
+router.get('/kepling/active', requireRole('admin', 'lurah', 'sekertaris'), lingkunganController.getActiveKeplings.bind(lingkunganController));
 
 // GET /lingkungan/kepling/user/:userId - Get kepling history by user
-router.get('/kepling/user/:userId', requireRole('admin', 'lurah'), lingkunganController.getKeplingHistoryByUser.bind(lingkunganController));
+router.get('/kepling/user/:userId', requireRole('admin', 'lurah', 'sekertaris'), lingkunganController.getKeplingHistoryByUser.bind(lingkunganController));
 
 // POST /lingkungan/kepling - Assign kepling to lingkungan (Admin only)
 router.post('/kepling', requireRole('admin'), lingkunganController.assignKepling.bind(lingkunganController));

@@ -58,6 +58,80 @@ class AdminService {
   }
 
   /**
+   * Assign staff role to user
+   * @param {string} userId - User ID
+   * @returns {Promise<object>} Updated user
+   * @throws {Error} If user not found or role transition is invalid
+   */
+  async assignStaffRole(userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+    });
+
+    if (!user) {
+      const error = new Error('User tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (user.role === 'staff') {
+      const error = new Error('User ini sudah memiliki role staff');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (user.role === 'admin') {
+      const error = new Error('Role admin tidak dapat diubah melalui endpoint ini');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (user.role === 'lurah' || user.role === 'sekertaris' || user.role === 'kepling') {
+      const error = new Error('User dengan role struktural harus diturunkan terlebih dahulu');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { role: 'staff' },
+    });
+
+    return updatedUser;
+  }
+
+  /**
+   * Demote staff role to warga
+   * @param {string} userId - User ID
+   * @returns {Promise<object>} Updated user
+   * @throws {Error} If user not found or not staff
+   */
+  async demoteStaffRole(userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+    });
+
+    if (!user) {
+      const error = new Error('User tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (user.role !== 'staff') {
+      const error = new Error('User ini tidak memiliki role staff');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { role: 'warga' },
+    });
+
+    return updatedUser;
+  }
+
+  /**
    * Get all validation requests with pagination and filters
    * @param {object} options - Query options
    * @returns {Promise<object>} Requests and pagination info
@@ -228,6 +302,12 @@ class AdminService {
       throw error;
     }
 
+    if (user.role === 'sekertaris') {
+      const error = new Error('Sekertaris aktif tidak dapat langsung dijadikan Lurah');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
     // Check if NIP already exists
     const existingNip = await prisma.lurahProfile.findUnique({
       where: { nip },
@@ -392,6 +472,223 @@ class AdminService {
    */
   async getLurahHistory() {
     const profiles = await prisma.lurahProfile.findMany({
+      orderBy: { mulaiMenjabat: 'desc' },
+      include: {
+        user: true,
+      },
+    });
+
+    return profiles;
+  }
+
+  // ==================== SEKERTARIS MANAGEMENT ====================
+
+  /**
+   * Get current active Sekertaris with profile
+   * @returns {Promise<object|null>} Current Sekertaris with profile or null
+   */
+  async getCurrentSekertaris() {
+    const sekertarisProfile = await prisma.sekertarisProfile.findFirst({
+      where: { isActive: true },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+      },
+    });
+
+    return sekertarisProfile;
+  }
+
+  /**
+   * Set a user as Sekertaris with profile information
+   * @param {object} data - Sekertaris data
+   * @returns {Promise<object>} Created/updated Sekertaris profile
+   * @throws {Error} If user not found or validation fails
+   */
+  async setSekertaris({ userId, nip, namaLengkap, jabatan, pangkat, mulaiMenjabat }) {
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+    });
+
+    if (!user) {
+      const error = new Error('User tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (user.role === 'sekertaris') {
+      const error = new Error('User ini sudah menjadi Sekertaris');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (user.role === 'admin') {
+      const error = new Error('Admin tidak dapat dijadikan Sekertaris');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (user.role === 'lurah') {
+      const error = new Error('Lurah aktif tidak dapat langsung dijadikan Sekertaris');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const existingNip = await prisma.sekertarisProfile.findUnique({
+      where: { nip },
+    });
+
+    if (existingNip && existingNip.userId !== BigInt(userId)) {
+      const error = new Error('NIP sudah digunakan oleh Sekertaris lain');
+      error.code = 'CONFLICT';
+      throw error;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let previousSekertaris = null;
+
+      const currentSekertarisProfile = await tx.sekertarisProfile.findFirst({
+        where: { isActive: true },
+        include: { user: true },
+      });
+
+      if (currentSekertarisProfile) {
+        previousSekertaris = currentSekertarisProfile.user;
+
+        await tx.sekertarisProfile.update({
+          where: { id: currentSekertarisProfile.id },
+          data: {
+            isActive: false,
+            akhirMenjabat: new Date(),
+          },
+        });
+
+        await tx.user.update({
+          where: { id: currentSekertarisProfile.userId },
+          data: { role: 'warga' },
+        });
+      }
+
+      await tx.user.update({
+        where: { id: BigInt(userId) },
+        data: { role: 'sekertaris' },
+      });
+
+      const newSekertarisProfile = await tx.sekertarisProfile.create({
+        data: {
+          userId: BigInt(userId),
+          nip,
+          namaLengkap,
+          jabatan: jabatan || 'Sekertaris',
+          pangkat: pangkat || null,
+          mulaiMenjabat: new Date(mulaiMenjabat),
+          isActive: true,
+        },
+        include: {
+          user: {
+            include: { kependudukan: true },
+          },
+        },
+      });
+
+      return { newSekertarisProfile, previousSekertaris };
+    });
+
+    return result;
+  }
+
+  /**
+   * Update Sekertaris profile information
+   * @param {object} data - Update data
+   * @returns {Promise<object>} Updated Sekertaris profile
+   * @throws {Error} If no active Sekertaris exists
+   */
+  async updateSekertarisProfile({ nip, namaLengkap, jabatan, pangkat }) {
+    const currentSekertarisProfile = await prisma.sekertarisProfile.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!currentSekertarisProfile) {
+      const error = new Error('Tidak ada Sekertaris yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (nip && nip !== currentSekertarisProfile.nip) {
+      const existingNip = await prisma.sekertarisProfile.findUnique({
+        where: { nip },
+      });
+
+      if (existingNip) {
+        const error = new Error('NIP sudah digunakan');
+        error.code = 'CONFLICT';
+        throw error;
+      }
+    }
+
+    const updatedProfile = await prisma.sekertarisProfile.update({
+      where: { id: currentSekertarisProfile.id },
+      data: {
+        ...(nip && { nip }),
+        ...(namaLengkap && { namaLengkap }),
+        ...(jabatan && { jabatan }),
+        ...(pangkat !== undefined && { pangkat }),
+      },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+      },
+    });
+
+    return updatedProfile;
+  }
+
+  /**
+   * Demote current Sekertaris to warga
+   * @returns {Promise<object>} Demoted user
+   * @throws {Error} If no Sekertaris exists
+   */
+  async demoteSekertaris() {
+    const currentSekertarisProfile = await prisma.sekertarisProfile.findFirst({
+      where: { isActive: true },
+      include: { user: true },
+    });
+
+    if (!currentSekertarisProfile) {
+      const error = new Error('Tidak ada Sekertaris yang aktif');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.sekertarisProfile.update({
+        where: { id: currentSekertarisProfile.id },
+        data: {
+          isActive: false,
+          akhirMenjabat: new Date(),
+        },
+      });
+
+      const demotedUser = await tx.user.update({
+        where: { id: currentSekertarisProfile.userId },
+        data: { role: 'warga' },
+        include: { kependudukan: true },
+      });
+
+      return demotedUser;
+    });
+
+    return result;
+  }
+
+  /**
+   * Get Sekertaris history (all Sekertaris profiles)
+   * @returns {Promise<object[]>} List of Sekertaris profiles
+   */
+  async getSekertarisHistory() {
+    const profiles = await prisma.sekertarisProfile.findMany({
       orderBy: { mulaiMenjabat: 'desc' },
       include: {
         user: true,

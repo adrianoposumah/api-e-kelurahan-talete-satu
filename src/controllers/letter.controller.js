@@ -340,8 +340,9 @@ class LetterController {
       const isOwner = letter.submission.userId.toString() === userId.toString();
       const isAdmin = userRole === 'admin';
       const isLurah = userRole === 'lurah';
+      const isSekertaris = userRole === 'sekertaris';
 
-      if (!isOwner && !isAdmin && !isLurah) {
+      if (!isOwner && !isAdmin && !isLurah && !isSekertaris) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'Anda tidak memiliki akses ke surat ini',

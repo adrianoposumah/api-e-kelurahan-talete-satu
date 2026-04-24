@@ -15,6 +15,12 @@ router.get('/users', adminController.getUsers.bind(adminController));
 // GET /admin/users/:id - Get user by ID
 router.get('/users/:id', adminController.getUserById.bind(adminController));
 
+// PATCH /admin/users/:id/assign-staff - Assign staff role to user
+router.patch('/users/:id/assign-staff', adminController.assignStaffRole.bind(adminController));
+
+// PATCH /admin/users/:id/demote-staff - Demote staff role to warga
+router.patch('/users/:id/demote-staff', adminController.demoteStaffRole.bind(adminController));
+
 // ==================== VALIDATE REQUESTS ====================
 
 // GET /admin/validate-requests - Get all validation requests with pagination
@@ -34,7 +40,7 @@ router.get('/lurah', adminController.getCurrentLurah.bind(adminController));
 // GET /admin/lurah/history - Get Lurah history
 router.get('/lurah/history', adminController.getLurahHistory.bind(adminController));
 
-// POST /admin/lurah - Set a user as Lurah (demotes current Lurah if exists)
+// POST /admin/lurah - Set a user as Lurah
 router.post('/lurah', adminController.setLurah.bind(adminController));
 
 // PATCH /admin/lurah - Update current Lurah profile
@@ -42,5 +48,22 @@ router.patch('/lurah', adminController.updateLurahProfile.bind(adminController))
 
 // DELETE /admin/lurah - Demote current Lurah to warga
 router.delete('/lurah', adminController.demoteLurah.bind(adminController));
+
+// ==================== SEKERTARIS MANAGEMENT ====================
+
+// GET /admin/sekertaris - Get current Sekertaris
+router.get('/sekertaris', adminController.getCurrentSekertaris.bind(adminController));
+
+// GET /admin/sekertaris/history - Get Sekertaris history
+router.get('/sekertaris/history', adminController.getSekertarisHistory.bind(adminController));
+
+// POST /admin/sekertaris - Set a user as Sekertaris
+router.post('/sekertaris', adminController.setSekertaris.bind(adminController));
+
+// PATCH /admin/sekertaris - Update current Sekertaris profile
+router.patch('/sekertaris', adminController.updateSekertarisProfile.bind(adminController));
+
+// DELETE /admin/sekertaris - Demote current Sekertaris to warga
+router.delete('/sekertaris', adminController.demoteSekertaris.bind(adminController));
 
 export default router;
