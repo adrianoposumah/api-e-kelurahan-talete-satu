@@ -1,12 +1,144 @@
 import prisma from '../config/prisma.js';
+import XLSX from 'xlsx';
 
 const VALID_JENIS_KELAMIN = ['L', 'P'];
 const VALID_GOLONGAN_DARAH = ['A', 'B', 'AB', 'O', 'TIDAK_DIKETAHUI'];
 const VALID_STATUS_KAWIN = ['BELUM_KAWIN', 'KAWIN', 'CERAI_HIDUP', 'CERAI_MATI'];
 
+const BATCH_REQUIRED_FIELDS = ['nik', 'nama', 'tempatLahir', 'tanggalLahir', 'jenisKelamin', 'alamat', 'kelurahan', 'kecamatan', 'kabupatenKota', 'provinsi', 'statusKawin', 'agama', 'pekerjaan'];
+
+const BATCH_FIELD_ALIASES = {
+  nik: ['nik'],
+  nama: ['nama'],
+  tempatLahir: ['tempatlahir', 'tempat_lahir', 'tempat lahir'],
+  tanggalLahir: ['tanggallahir', 'tanggal_lahir', 'tanggal lahir'],
+  jenisKelamin: ['jeniskelamin', 'jenis_kelamin', 'jenis kelamin'],
+  golonganDarah: ['golongandarah', 'golongan_darah', 'golongan darah'],
+  alamat: ['alamat'],
+  rt: ['rt'],
+  rw: ['rw'],
+  lingkunganId: ['lingkunganid', 'lingkungan_id', 'lingkungan id'],
+  kelurahan: ['kelurahan'],
+  kecamatan: ['kecamatan'],
+  kabupatenKota: ['kabupatenkota', 'kabupaten_kota', 'kabupaten kota'],
+  provinsi: ['provinsi'],
+  statusKawin: ['statuskawin', 'status_kawin', 'status kawin'],
+  agama: ['agama'],
+  pekerjaan: ['pekerjaan'],
+  kewarganegaraan: ['kewarganegaraan'],
+};
+
 const parseNik = (nik) => String(nik || '').trim();
 
+const isPresent = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+
+const normalizeEnumToken = (value) => {
+  if (!isPresent(value)) return null;
+  return String(value).trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+};
+
+const normalizeHeader = (header) =>
+  String(header || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+const normalizeRow = (row) => {
+  const normalized = {};
+  Object.entries(row).forEach(([key, value]) => {
+    normalized[normalizeHeader(key)] = value;
+  });
+  return normalized;
+};
+
+const toNullableString = (value) => {
+  if (!isPresent(value)) return null;
+  return String(value).trim();
+};
+
+const normalizeBatchJenisKelamin = (value) => {
+  const token = normalizeEnumToken(value);
+  if (!token) return null;
+
+  if (['l', 'laki laki', 'lakilaki', 'pria', 'male'].includes(token)) return 'L';
+  if (['p', 'perempuan', 'wanita', 'female'].includes(token)) return 'P';
+
+  return toNullableString(value);
+};
+
+const normalizeBatchGolonganDarah = (value) => {
+  if (!isPresent(value)) return null;
+
+  const rawValue = String(value).trim().toUpperCase();
+  if (['A', 'B', 'AB', 'O'].includes(rawValue)) return rawValue;
+
+  const token = normalizeEnumToken(value);
+  if (['tidak diketahui', 'unknown', 'tidak tahu', 'tahu'].includes(token)) return 'TIDAK_DIKETAHUI';
+  if (String(value).trim() === '-') return 'TIDAK_DIKETAHUI';
+
+  return toNullableString(value);
+};
+
+const normalizeBatchStatusKawin = (value) => {
+  const token = normalizeEnumToken(value);
+  if (!token) return null;
+
+  if (['belum kawin', 'single', 'belum menikah', 'lajang'].includes(token)) return 'BELUM_KAWIN';
+  if (['kawin', 'menikah', 'married'].includes(token)) return 'KAWIN';
+  if (['cerai hidup', 'divorced'].includes(token)) return 'CERAI_HIDUP';
+  if (['cerai mati', 'ditinggal mati', 'widow', 'widower'].includes(token)) return 'CERAI_MATI';
+
+  return toNullableString(value);
+};
+
+const mapRowToPayload = (row) => {
+  const normalized = normalizeRow(row);
+
+  const getValue = (aliases) => {
+    for (const alias of aliases) {
+      const value = normalized[normalizeHeader(alias)];
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  };
+
+  return {
+    nik: toNullableString(getValue(BATCH_FIELD_ALIASES.nik)),
+    nama: toNullableString(getValue(BATCH_FIELD_ALIASES.nama)),
+    tempatLahir: toNullableString(getValue(BATCH_FIELD_ALIASES.tempatLahir)),
+    tanggalLahir: getValue(BATCH_FIELD_ALIASES.tanggalLahir),
+    jenisKelamin: normalizeBatchJenisKelamin(getValue(BATCH_FIELD_ALIASES.jenisKelamin)),
+    golonganDarah: normalizeBatchGolonganDarah(getValue(BATCH_FIELD_ALIASES.golonganDarah)),
+    alamat: toNullableString(getValue(BATCH_FIELD_ALIASES.alamat)),
+    rt: toNullableString(getValue(BATCH_FIELD_ALIASES.rt)),
+    rw: toNullableString(getValue(BATCH_FIELD_ALIASES.rw)),
+    lingkunganId: toNullableString(getValue(BATCH_FIELD_ALIASES.lingkunganId)),
+    kelurahan: toNullableString(getValue(BATCH_FIELD_ALIASES.kelurahan)),
+    kecamatan: toNullableString(getValue(BATCH_FIELD_ALIASES.kecamatan)),
+    kabupatenKota: toNullableString(getValue(BATCH_FIELD_ALIASES.kabupatenKota)),
+    provinsi: toNullableString(getValue(BATCH_FIELD_ALIASES.provinsi)),
+    statusKawin: normalizeBatchStatusKawin(getValue(BATCH_FIELD_ALIASES.statusKawin)),
+    agama: toNullableString(getValue(BATCH_FIELD_ALIASES.agama)),
+    pekerjaan: toNullableString(getValue(BATCH_FIELD_ALIASES.pekerjaan)),
+    kewarganegaraan: toNullableString(getValue(BATCH_FIELD_ALIASES.kewarganegaraan)),
+  };
+};
+
 const parseDateValue = (dateValue, fieldName) => {
+  if (typeof dateValue === 'number') {
+    const dateCode = XLSX.SSF.parse_date_code(dateValue);
+    if (dateCode) {
+      return new Date(Date.UTC(dateCode.y, dateCode.m - 1, dateCode.d));
+    }
+  }
+
+  if (typeof dateValue === 'string' && /^\d+(\.\d+)?$/.test(dateValue.trim())) {
+    const numericValue = Number(dateValue);
+    const dateCode = XLSX.SSF.parse_date_code(numericValue);
+    if (dateCode) {
+      return new Date(Date.UTC(dateCode.y, dateCode.m - 1, dateCode.d));
+    }
+  }
+
   const parsedDate = new Date(dateValue);
   if (Number.isNaN(parsedDate.getTime())) {
     const error = new Error(`${fieldName} tidak valid`);
@@ -39,6 +171,86 @@ const assertEnumValue = (value, validValues, fieldName) => {
  * Kependudukan Service - Handles data kependudukan business logic
  */
 class KependudukanService {
+  /**
+   * Batch create data from XLSX
+   * @param {Buffer} fileBuffer - Uploaded XLSX file buffer
+   * @returns {Promise<object>} Batch processing summary
+   */
+  async batchCreateDataFromXlsx(fileBuffer) {
+    let workbook;
+
+    try {
+      workbook = XLSX.read(fileBuffer, {
+        type: 'buffer',
+        cellDates: true,
+      });
+    } catch {
+      const error = new Error('File Excel tidak valid atau tidak dapat dibaca');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      const error = new Error('File Excel tidak memiliki sheet');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      defval: null,
+      raw: true,
+    });
+
+    if (rows.length === 0) {
+      const error = new Error('File Excel tidak memiliki data');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const created = [];
+    const failed = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const rowNumber = i + 2;
+
+      try {
+        const payload = mapRowToPayload(rows[i]);
+        const missingFields = BATCH_REQUIRED_FIELDS.filter((field) => !isPresent(payload[field]));
+
+        if (missingFields.length > 0) {
+          failed.push({
+            row: rowNumber,
+            message: `Field wajib belum diisi: ${missingFields.join(', ')}`,
+          });
+          continue;
+        }
+
+        const createdData = await this.createData(payload);
+
+        created.push({
+          row: rowNumber,
+          nik: createdData.nik,
+          nama: createdData.nama,
+        });
+      } catch (error) {
+        failed.push({
+          row: rowNumber,
+          message: error.message,
+        });
+      }
+    }
+
+    return {
+      total_rows: rows.length,
+      created_count: created.length,
+      failed_count: failed.length,
+      created,
+      failed,
+      expected_columns: Object.keys(BATCH_FIELD_ALIASES),
+    };
+  }
+
   /**
    * Get all data kependudukan with pagination and filters
    * @param {object} options - Query options

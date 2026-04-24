@@ -6,6 +6,36 @@ import { formatKependudukanManagementResponse } from '../utils/formatters.js';
  */
 class KependudukanController {
   /**
+   * POST /data-kependudukan/batch-upload - Batch create data from xlsx file
+   */
+  async batchCreateData(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'File .xlsx wajib diupload dengan field "file"',
+        });
+      }
+
+      const result = await kependudukanService.batchCreateDataFromXlsx(req.file.buffer);
+      const statusCode = result.failed_count > 0 ? 200 : 201;
+
+      res.status(statusCode).json({
+        message: 'Batch upload data kependudukan selesai diproses',
+        data: result,
+      });
+    } catch (error) {
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
    * GET /data-kependudukan - Get all data kependudukan
    */
   async getAllData(req, res, next) {
