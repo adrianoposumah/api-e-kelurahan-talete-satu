@@ -55,6 +55,33 @@ export const formatKependudukanResponse = (kependudukan) => ({
 });
 
 /**
+ * Format kependudukan object for management endpoints
+ * @param {object} kependudukan - Kependudukan object with relations
+ * @returns {object} Formatted kependudukan management object
+ */
+export const formatKependudukanManagementResponse = (kependudukan) => ({
+  ...formatKependudukanResponse(kependudukan),
+  lingkungan_id: kependudukan.lingkunganId?.toString() || null,
+  created_at: kependudukan.createdAt,
+  updated_at: kependudukan.updatedAt,
+  lingkungan: kependudukan.lingkungan
+    ? {
+        id: kependudukan.lingkungan.id.toString(),
+        nama: kependudukan.lingkungan.nama,
+        kode: kependudukan.lingkungan.kode,
+      }
+    : undefined,
+  user: kependudukan.user
+    ? {
+        id: kependudukan.user.id.toString(),
+        nama: kependudukan.user.nama,
+        role: kependudukan.user.role,
+        is_validate: kependudukan.user.isValidate,
+      }
+    : undefined,
+});
+
+/**
  * Format validate request object for API response
  * @param {object} request - ValidateRequest object from database
  * @returns {object} Formatted validate request object
