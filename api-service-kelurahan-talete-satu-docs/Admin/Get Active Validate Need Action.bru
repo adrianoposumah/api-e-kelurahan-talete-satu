@@ -1,0 +1,15 @@
+meta {
+  name: Get Active Validate Need Action
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{url}}/v1/admin/validate-requests/active
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

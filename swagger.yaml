@@ -19,6 +19,8 @@ tags:
     description: Endpoints untuk permintaan validasi user
   - name: Admin
     description: Endpoints khusus admin untuk manajemen user dan validasi
+  - name: Kependudukan
+    description: Endpoints untuk manajemen data kependudukan (staff/admin/lurah/sekertaris)
 
 paths:
   # ==================== AUTH ROUTES ====================
@@ -307,6 +309,494 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # ==================== KEPENDUDUKAN ROUTES ====================
+  /data-kependudukan:
+    get:
+      tags: [Kependudukan]
+      summary: Get semua data kependudukan
+      description: Mengambil daftar data kependudukan dengan pagination dan filter. Hanya untuk role staff, admin, lurah, sekertaris.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Nomor halaman
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Jumlah data per halaman
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Pencarian berdasarkan NIK atau nama
+        - in: query
+          name: lingkungan_id
+          schema:
+            type: string
+          description: Filter berdasarkan ID lingkungan
+        - in: query
+          name: jenis_kelamin
+          schema:
+            type: string
+            enum: [L, P]
+          description: Filter jenis kelamin
+        - in: query
+          name: status_kawin
+          schema:
+            type: string
+            enum: [BELUM_KAWIN, KAWIN, CERAI_HIDUP, CERAI_MATI]
+          description: Filter status kawin
+      responses:
+        '200':
+          description: List data kependudukan dengan pagination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanListResponse'
+              example:
+                data:
+                  - nik: '7172010101010001'
+                    nama: 'Budi Santoso'
+                    tempat_lahir: 'Tomohon'
+                    tanggal_lahir: '1990-01-01T00:00:00.000Z'
+                    jenis_kelamin: 'L'
+                    golongan_darah: 'O'
+                    alamat: 'Jl. Merdeka No. 1'
+                    rt: '001'
+                    rw: '002'
+                    lingkungan_id: '1'
+                    kelurahan: 'Talete Satu'
+                    kecamatan: 'Tomohon Tengah'
+                    kabupaten_kota: 'Tomohon'
+                    provinsi: 'Sulawesi Utara'
+                    status_kawin: 'KAWIN'
+                    agama: 'Kristen'
+                    pekerjaan: 'Wiraswasta'
+                    kewarganegaraan: 'WNI'
+                    created_at: '2026-04-25T03:00:00.000Z'
+                    updated_at: '2026-04-25T03:10:00.000Z'
+                    lingkungan:
+                      id: '1'
+                      nama: 'Lingkungan 1'
+                      kode: 'L01'
+                    user:
+                      id: '10'
+                      nama: 'Budi Santoso'
+                      role: 'warga'
+                      is_validate: true
+                pagination:
+                  page: 1
+                  limit: 10
+                  total: 1
+                  total_pages: 1
+        '400':
+          description: Query parameter tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Kependudukan]
+      summary: Buat data kependudukan baru
+      description: Menambahkan satu data kependudukan baru
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KependudukanCreateRequest'
+            example:
+              nik: '7172010101010002'
+              nama: 'Sinta Maria'
+              tempat_lahir: 'Tomohon'
+              tanggal_lahir: '1992-02-10'
+              jenis_kelamin: 'P'
+              golongan_darah: 'A'
+              alamat: 'Jl. Pahlawan No. 3'
+              rt: '001'
+              rw: '003'
+              lingkungan_id: '1'
+              kelurahan: 'Talete Satu'
+              kecamatan: 'Tomohon Tengah'
+              kabupaten_kota: 'Tomohon'
+              provinsi: 'Sulawesi Utara'
+              status_kawin: 'BELUM_KAWIN'
+              agama: 'Kristen'
+              pekerjaan: 'Guru'
+              kewarganegaraan: 'WNI'
+      responses:
+        '201':
+          description: Data kependudukan berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanMutationResponse'
+              example:
+                message: 'Data kependudukan berhasil dibuat'
+                data:
+                  nik: '7172010101010002'
+                  nama: 'Sinta Maria'
+                  tempat_lahir: 'Tomohon'
+                  tanggal_lahir: '1992-02-10T00:00:00.000Z'
+                  jenis_kelamin: 'P'
+                  golongan_darah: 'A'
+                  alamat: 'Jl. Pahlawan No. 3'
+                  rt: '001'
+                  rw: '003'
+                  lingkungan_id: '1'
+                  kelurahan: 'Talete Satu'
+                  kecamatan: 'Tomohon Tengah'
+                  kabupaten_kota: 'Tomohon'
+                  provinsi: 'Sulawesi Utara'
+                  status_kawin: 'BELUM_KAWIN'
+                  agama: 'Kristen'
+                  pekerjaan: 'Guru'
+                  kewarganegaraan: 'WNI'
+                  created_at: '2026-04-25T04:00:00.000Z'
+                  updated_at: '2026-04-25T04:00:00.000Z'
+                  lingkungan:
+                    id: '1'
+                    nama: 'Lingkungan 1'
+                    kode: 'L01'
+                  user: null
+        '400':
+          description: Data tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Lingkungan tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: NIK sudah terdaftar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /data-kependudukan/batch-upload:
+    post:
+      tags: [Kependudukan]
+      summary: Batch upload data kependudukan dari file XLSX
+      description: Upload file .xlsx (maks 5MB) untuk menambahkan data kependudukan secara massal. Diproses per baris, baris gagal tidak menghentikan proses baris lain.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File Excel .xlsx
+      responses:
+        '201':
+          description: Semua baris berhasil diproses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanBatchUploadResponse'
+              example:
+                message: 'Batch upload data kependudukan selesai diproses'
+                data:
+                  total_rows: 2
+                  created_count: 2
+                  failed_count: 0
+                  created:
+                    - row: 2
+                      nik: '7172010101010003'
+                      nama: 'Yohan'
+                    - row: 3
+                      nik: '7172010101010004'
+                      nama: 'Maria'
+                  failed: []
+                  expected_columns: [nik, nama, tempatLahir, tanggalLahir, jenisKelamin, golonganDarah, alamat, rt, rw, lingkunganId, kelurahan, kecamatan, kabupatenKota, provinsi, statusKawin, agama, pekerjaan, kewarganegaraan]
+        '200':
+          description: Batch diproses dengan sebagian baris gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanBatchUploadResponse'
+              example:
+                message: 'Batch upload data kependudukan selesai diproses'
+                data:
+                  total_rows: 3
+                  created_count: 2
+                  failed_count: 1
+                  created:
+                    - row: 2
+                      nik: '7172010101010005'
+                      nama: 'Arman'
+                    - row: 3
+                      nik: '7172010101010006'
+                      nama: 'Lina'
+                  failed:
+                    - row: 4
+                      message: 'Field wajib belum diisi: nik'
+                  expected_columns: [nik, nama, tempatLahir, tanggalLahir, jenisKelamin, golonganDarah, alamat, rt, rw, lingkunganId, kelurahan, kecamatan, kabupatenKota, provinsi, statusKawin, agama, pekerjaan, kewarganegaraan]
+        '400':
+          description: File tidak valid, ekstensi bukan .xlsx, atau data sheet kosong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /data-kependudukan/{nik}:
+    get:
+      tags: [Kependudukan]
+      summary: Get data kependudukan berdasarkan NIK
+      description: Mengambil detail satu data kependudukan
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: nik
+          required: true
+          schema:
+            type: string
+          description: NIK (16 digit)
+      responses:
+        '200':
+          description: Detail data kependudukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanManagement'
+              example:
+                nik: '7172010101010001'
+                nama: 'Budi Santoso'
+                tempat_lahir: 'Tomohon'
+                tanggal_lahir: '1990-01-01T00:00:00.000Z'
+                jenis_kelamin: 'L'
+                golongan_darah: 'O'
+                alamat: 'Jl. Merdeka No. 1'
+                rt: '001'
+                rw: '002'
+                lingkungan_id: '1'
+                kelurahan: 'Talete Satu'
+                kecamatan: 'Tomohon Tengah'
+                kabupaten_kota: 'Tomohon'
+                provinsi: 'Sulawesi Utara'
+                status_kawin: 'KAWIN'
+                agama: 'Kristen'
+                pekerjaan: 'Wiraswasta'
+                kewarganegaraan: 'WNI'
+                created_at: '2026-04-25T03:00:00.000Z'
+                updated_at: '2026-04-25T03:10:00.000Z'
+                lingkungan:
+                  id: '1'
+                  nama: 'Lingkungan 1'
+                  kode: 'L01'
+                user:
+                  id: '10'
+                  nama: 'Budi Santoso'
+                  role: 'warga'
+                  is_validate: true
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Data kependudukan tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags: [Kependudukan]
+      summary: Update data kependudukan
+      description: Update data kependudukan berdasarkan NIK
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: nik
+          required: true
+          schema:
+            type: string
+          description: NIK (16 digit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KependudukanUpdateRequest'
+            example:
+              alamat: 'Jl. Pahlawan No. 99'
+              rt: '004'
+              rw: '005'
+              status_kawin: 'KAWIN'
+              lingkungan_id: '2'
+      responses:
+        '200':
+          description: Data kependudukan berhasil diupdate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanMutationResponse'
+              example:
+                message: 'Data kependudukan berhasil diupdate'
+                data:
+                  nik: '7172010101010002'
+                  nama: 'Sinta Maria'
+                  tempat_lahir: 'Tomohon'
+                  tanggal_lahir: '1992-02-10T00:00:00.000Z'
+                  jenis_kelamin: 'P'
+                  golongan_darah: 'A'
+                  alamat: 'Jl. Pahlawan No. 99'
+                  rt: '004'
+                  rw: '005'
+                  lingkungan_id: '2'
+                  kelurahan: 'Talete Satu'
+                  kecamatan: 'Tomohon Tengah'
+                  kabupaten_kota: 'Tomohon'
+                  provinsi: 'Sulawesi Utara'
+                  status_kawin: 'KAWIN'
+                  agama: 'Kristen'
+                  pekerjaan: 'Guru'
+                  kewarganegaraan: 'WNI'
+                  created_at: '2026-04-25T04:00:00.000Z'
+                  updated_at: '2026-04-25T05:00:00.000Z'
+                  lingkungan:
+                    id: '2'
+                    nama: 'Lingkungan 2'
+                    kode: 'L02'
+                  user: null
+        '400':
+          description: Data tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Data kependudukan atau lingkungan tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Kependudukan]
+      summary: Hapus data kependudukan
+      description: Menghapus data kependudukan berdasarkan NIK. Ditolak jika data masih terhubung dengan user atau riwayat validasi.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: nik
+          required: true
+          schema:
+            type: string
+          description: NIK (16 digit)
+      responses:
+        '200':
+          description: Data kependudukan berhasil dihapus
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Data kependudukan berhasil dihapus
+              example:
+                message: Data kependudukan berhasil dihapus
+        '400':
+          description: Data tidak dapat dihapus karena constraint bisnis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - role tidak memiliki akses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Data kependudukan tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # ==================== ADMIN ROUTES ====================
   /admin/users:
     get:
@@ -338,7 +828,7 @@ paths:
           name: role
           schema:
             type: string
-            enum: [warga, kepling, lurah, admin]
+            enum: [warga, staff, kepling, lurah, sekertaris, admin]
           description: Filter berdasarkan role user
       responses:
         '200':
@@ -436,6 +926,53 @@ paths:
       responses:
         '200':
           description: List permintaan validasi dengan pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidateRequest'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/validate-requests/active:
+    get:
+      tags: [Admin]
+      summary: Get permintaan validasi aktif yang perlu tindakan
+      description: Admin dapat melihat daftar permintaan validasi dengan status pending yang masih membutuhkan aksi
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Nomor halaman
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Jumlah data per halaman
+      responses:
+        '200':
+          description: List permintaan validasi pending dengan pagination
           content:
             application/json:
               schema:
@@ -697,7 +1234,7 @@ components:
           example: '081234567890'
         role:
           type: string
-          enum: [warga, kepling, lurah, admin]
+          enum: [warga, staff, kepling, lurah, sekertaris, admin]
           description: Role user dalam sistem
           example: 'warga'
         is_validate:
@@ -784,8 +1321,9 @@ components:
           example: 'Gorontalo'
         status_kawin:
           type: string
+          enum: [BELUM_KAWIN, KAWIN, CERAI_HIDUP, CERAI_MATI]
           description: Status perkawinan
-          example: 'Belum Kawin'
+          example: 'BELUM_KAWIN'
         agama:
           type: string
           description: Agama
@@ -798,6 +1336,260 @@ components:
           type: string
           description: Kewarganegaraan
           example: 'Indonesia'
+
+    KependudukanRelatedLingkungan:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '1'
+        nama:
+          type: string
+          example: 'Lingkungan 1'
+        kode:
+          type: string
+          nullable: true
+          example: 'L01'
+
+    KependudukanRelatedUser:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '1'
+        nama:
+          type: string
+          example: 'Budi Santoso'
+        role:
+          type: string
+          enum: [warga, staff, kepling, lurah, sekertaris, admin]
+          example: 'warga'
+        is_validate:
+          type: boolean
+          example: true
+
+    KependudukanManagement:
+      allOf:
+        - $ref: '#/components/schemas/DataKependudukan'
+        - type: object
+          properties:
+            lingkungan_id:
+              type: string
+              nullable: true
+              description: Lingkungan ID (BigInt converted to string)
+              example: '1'
+            created_at:
+              type: string
+              format: date-time
+              example: '2026-04-25T03:00:00.000Z'
+            updated_at:
+              type: string
+              format: date-time
+              example: '2026-04-25T03:10:00.000Z'
+            lingkungan:
+              $ref: '#/components/schemas/KependudukanRelatedLingkungan'
+              nullable: true
+            user:
+              $ref: '#/components/schemas/KependudukanRelatedUser'
+              nullable: true
+
+    KependudukanListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KependudukanManagement'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    KependudukanMutationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Data kependudukan berhasil dibuat
+        data:
+          $ref: '#/components/schemas/KependudukanManagement'
+
+    KependudukanCreateRequest:
+      type: object
+      required: [nik, nama, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, kelurahan, kecamatan, kabupaten_kota, provinsi, status_kawin, agama, pekerjaan]
+      properties:
+        nik:
+          type: string
+          description: NIK 16 digit
+          pattern: '^\d{16}$'
+          example: '7172010101010001'
+        nama:
+          type: string
+          example: 'Budi Santoso'
+        tempat_lahir:
+          type: string
+          example: 'Tomohon'
+        tanggal_lahir:
+          type: string
+          format: date
+          example: '1990-01-01'
+        jenis_kelamin:
+          type: string
+          enum: [L, P]
+          example: 'L'
+        golongan_darah:
+          type: string
+          nullable: true
+          enum: [A, B, AB, O, TIDAK_DIKETAHUI]
+          example: 'O'
+        alamat:
+          type: string
+          example: 'Jl. Merdeka No. 1'
+        rt:
+          type: string
+          nullable: true
+          example: '001'
+        rw:
+          type: string
+          nullable: true
+          example: '002'
+        lingkungan_id:
+          type: string
+          nullable: true
+          description: Lingkungan ID
+          example: '1'
+        kelurahan:
+          type: string
+          example: 'Talete Satu'
+        kecamatan:
+          type: string
+          example: 'Tomohon Tengah'
+        kabupaten_kota:
+          type: string
+          example: 'Tomohon'
+        provinsi:
+          type: string
+          example: 'Sulawesi Utara'
+        status_kawin:
+          type: string
+          enum: [BELUM_KAWIN, KAWIN, CERAI_HIDUP, CERAI_MATI]
+          example: 'BELUM_KAWIN'
+        agama:
+          type: string
+          example: 'Kristen'
+        pekerjaan:
+          type: string
+          example: 'Wiraswasta'
+        kewarganegaraan:
+          type: string
+          nullable: true
+          example: 'WNI'
+
+    KependudukanUpdateRequest:
+      type: object
+      description: Minimal satu field harus diisi untuk update
+      properties:
+        nik:
+          type: string
+          description: Jika diisi harus sama dengan parameter path
+          pattern: '^\d{16}$'
+          example: '7172010101010001'
+        nama:
+          type: string
+        tempat_lahir:
+          type: string
+        tanggal_lahir:
+          type: string
+          format: date
+        jenis_kelamin:
+          type: string
+          enum: [L, P]
+        golongan_darah:
+          type: string
+          nullable: true
+          enum: [A, B, AB, O, TIDAK_DIKETAHUI]
+        alamat:
+          type: string
+        rt:
+          type: string
+          nullable: true
+        rw:
+          type: string
+          nullable: true
+        lingkungan_id:
+          type: string
+          nullable: true
+          description: Kosongkan atau null untuk melepas relasi lingkungan
+        kelurahan:
+          type: string
+        kecamatan:
+          type: string
+        kabupaten_kota:
+          type: string
+        provinsi:
+          type: string
+        status_kawin:
+          type: string
+          enum: [BELUM_KAWIN, KAWIN, CERAI_HIDUP, CERAI_MATI]
+        agama:
+          type: string
+        pekerjaan:
+          type: string
+        kewarganegaraan:
+          type: string
+
+    KependudukanBatchCreatedRow:
+      type: object
+      properties:
+        row:
+          type: integer
+          example: 2
+        nik:
+          type: string
+          example: '7172010101010001'
+        nama:
+          type: string
+          example: 'Budi Santoso'
+
+    KependudukanBatchFailedRow:
+      type: object
+      properties:
+        row:
+          type: integer
+          example: 4
+        message:
+          type: string
+          example: 'Field wajib belum diisi: nik'
+
+    KependudukanBatchUploadResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Batch upload data kependudukan selesai diproses
+        data:
+          type: object
+          properties:
+            total_rows:
+              type: integer
+              example: 5
+            created_count:
+              type: integer
+              example: 3
+            failed_count:
+              type: integer
+              example: 2
+            created:
+              type: array
+              items:
+                $ref: '#/components/schemas/KependudukanBatchCreatedRow'
+            failed:
+              type: array
+              items:
+                $ref: '#/components/schemas/KependudukanBatchFailedRow'
+            expected_columns:
+              type: array
+              items:
+                type: string
+              example: [nik, nama, tempatLahir, tanggalLahir, jenisKelamin, golonganDarah, alamat, rt, rw, lingkunganId, kelurahan, kecamatan, kabupatenKota, provinsi, statusKawin, agama, pekerjaan, kewarganegaraan]
 
     ValidateRequest:
       type: object

@@ -132,6 +132,27 @@ class AdminController {
   }
 
   /**
+   * GET /admin/validate-requests/active - Get pending validation requests that need action
+   */
+  async getActiveValidateRequests(req, res, next) {
+    try {
+      const { page, limit } = req.query;
+
+      const { requests, pagination } = await adminService.getActiveValidateRequests({
+        page,
+        limit,
+      });
+
+      res.json({
+        data: requests.map(formatValidateRequestResponse),
+        pagination,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /admin/validate-requests/:id - Get validation request by ID
    */
   async getValidateRequestById(req, res, next) {

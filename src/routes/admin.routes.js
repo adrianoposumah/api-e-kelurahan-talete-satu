@@ -26,6 +26,9 @@ router.patch('/users/:id/demote-staff', adminController.demoteStaffRole.bind(adm
 // GET /admin/validate-requests - Get all validation requests with pagination
 router.get('/validate-requests', adminController.getValidateRequests.bind(adminController));
 
+// GET /admin/validate-requests/active - Get pending validation requests that need action
+router.get('/validate-requests/active', adminController.getActiveValidateRequests.bind(adminController));
+
 // GET /admin/validate-requests/:id - Get validation request by ID
 router.get('/validate-requests/:id', adminController.getValidateRequestById.bind(adminController));
 

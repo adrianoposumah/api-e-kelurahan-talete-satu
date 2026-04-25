@@ -169,6 +169,41 @@ class AdminService {
   }
 
   /**
+   * Get pending validation requests that still need admin action
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Pending requests and pagination info
+   */
+  async getActiveValidateRequests({ page = 1, limit = 10 }) {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const where = { status: 'pending' };
+
+    const [requests, total] = await Promise.all([
+      prisma.validateRequest.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'asc' },
+        include: {
+          user: true,
+          kependudukan: true,
+          admin: true,
+        },
+      }),
+      prisma.validateRequest.count({ where }),
+    ]);
+
+    return {
+      requests,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        total_pages: Math.ceil(total / parseInt(limit)),
+      },
+    };
+  }
+
+  /**
    * Get validation request by ID
    * @param {string} requestId - Request ID
    * @returns {Promise<object>} Validation request
