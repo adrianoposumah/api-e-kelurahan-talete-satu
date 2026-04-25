@@ -1,4 +1,5 @@
 import prisma from '../config/prisma.js';
+import letterService from './letter.service.js';
 
 /**
  * Submission Service - Handles submission workflow business logic
@@ -457,68 +458,56 @@ class SubmissionService {
   }
 
   /**
-   * Approve submission by lurah
+   * Approve submission by lurah — triggers the 7-phase letter generation pipeline.
+   * The Lurah provides a passphrase to decrypt their private key and sign the letter.
    * @param {object} data - Approval data
-   * @returns {Promise<object>} Updated submission
+   * @returns {Promise<object>} Updated submission with issued letter
    */
-  async approveByLurah({ submissionId, lurahUserId, note }) {
-    const submission = await prisma.submission.findUnique({
-      where: { id: BigInt(submissionId) },
+  async approveByLurah({ submissionId, lurahUserId, passphrase, note, keterangan }) {
+    // Delegate to letter service which handles:
+    // - Validation (status must be pending_lurah)
+    // - Auto letter number generation
+    // - Template rendering → PDF generation
+    // - Canonical data → hash → RSA signing
+    // - XMP metadata embedding
+    // - PDF save to disk
+    // - DB transaction (approval record + issued letter + status → approved)
+    const result = await letterService.issueLetter({
+      submissionId,
+      lurahUserId,
+      passphrase,
+      note,
+      keterangan,
     });
 
-    if (!submission) {
-      const error = new Error('Submission tidak ditemukan');
-      error.code = 'NOT_FOUND';
-      throw error;
-    }
-
-    if (submission.status !== 'pending_lurah') {
-      const error = new Error('Submission tidak dalam status pending_lurah');
-      error.code = 'BAD_REQUEST';
-      throw error;
-    }
-
-    // Update submission and create approval record in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create approval record
-      await tx.submissionApproval.create({
-        data: {
-          submissionId: BigInt(submissionId),
-          approvedBy: BigInt(lurahUserId),
-          stage: 'lurah',
-          status: 'approved',
-          note: note || null,
+    // Re-fetch the full submission for response formatting
+    const updatedSubmission = await prisma.submission.findUnique({
+      where: { id: BigInt(submissionId) },
+      include: {
+        user: {
+          include: { kependudukan: true },
         },
-      });
-
-      // Update submission status
-      const updatedSubmission = await tx.submission.update({
-        where: { id: BigInt(submissionId) },
-        data: { status: 'approved' },
-        include: {
-          user: {
-            include: { kependudukan: true },
-          },
-          lingkungan: {
-            include: {
-              keplings: {
-                where: { selesai: null },
-                include: { user: true },
-              },
+        lingkungan: {
+          include: {
+            keplings: {
+              where: { selesai: null },
+              include: { user: true },
             },
           },
-          documents: true,
-          approvals: {
-            include: { approver: true },
-            orderBy: { createdAt: 'asc' },
-          },
         },
-      });
-
-      return updatedSubmission;
+        documents: true,
+        approvals: {
+          include: { approver: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        issuedLetter: true,
+      },
     });
 
-    return result;
+    return {
+      submission: updatedSubmission,
+      letterResult: result,
+    };
   }
 
   /**
@@ -595,53 +584,6 @@ class SubmissionService {
     return result;
   }
 
-  /**
-   * Issue submission (mark as issued) - Admin only
-   * @param {object} data - Issue data
-   * @returns {Promise<object>} Updated submission
-   */
-  async issueSubmission({ submissionId }) {
-    const submission = await prisma.submission.findUnique({
-      where: { id: BigInt(submissionId) },
-    });
-
-    if (!submission) {
-      const error = new Error('Submission tidak ditemukan');
-      error.code = 'NOT_FOUND';
-      throw error;
-    }
-
-    if (submission.status !== 'approved') {
-      const error = new Error('Submission belum disetujui');
-      error.code = 'BAD_REQUEST';
-      throw error;
-    }
-
-    const updatedSubmission = await prisma.submission.update({
-      where: { id: BigInt(submissionId) },
-      data: { status: 'issued' },
-      include: {
-        user: {
-          include: { kependudukan: true },
-        },
-        lingkungan: {
-          include: {
-            keplings: {
-              where: { selesai: null },
-              include: { user: true },
-            },
-          },
-        },
-        documents: true,
-        approvals: {
-          include: { approver: true },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
-
-    return updatedSubmission;
-  }
 
   /**
    * Delete submission (owner only, only if still pending_kepling)

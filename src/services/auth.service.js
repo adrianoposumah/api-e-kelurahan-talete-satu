@@ -28,7 +28,7 @@ class AuthService {
     const expiresIn = env.JWT_REFRESH_EXPIRES_IN;
     const match = expiresIn.match(/^(\d+)([dhms])$/);
     if (!match) {
-      return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // default 7 days
+      return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // default 30 days
     }
 
     const value = parseInt(match[1], 10);

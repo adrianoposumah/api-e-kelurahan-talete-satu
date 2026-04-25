@@ -354,23 +354,43 @@ class SubmissionController {
   }
 
   /**
-   * POST /submissions/:id/lurah/approve - Approve by lurah
+   * POST /submissions/:id/lurah/approve - Approve by lurah (triggers letter generation)
+   * Body: { passphrase, note?, keterangan? }
    */
   async approveByLurah(req, res, next) {
     try {
       const { id } = req.params;
       const lurahUserId = req.user.userId;
-      const { note } = req.body;
+      const { passphrase, note, keterangan } = req.body;
 
-      const submission = await submissionService.approveByLurah({
+      // Passphrase is required to decrypt the Lurah's signing key
+      if (!passphrase) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Passphrase wajib diisi untuk menandatangani surat',
+        });
+      }
+
+      const { submission, letterResult } = await submissionService.approveByLurah({
         submissionId: id,
         lurahUserId,
+        passphrase,
         note,
+        keterangan,
       });
 
       res.json({
-        message: 'Submission berhasil disetujui oleh Lurah',
-        data: formatSubmissionResponse(submission),
+        message: 'Submission berhasil disetujui dan surat telah diterbitkan',
+        data: {
+          submission: formatSubmissionResponse(submission),
+          letter: {
+            letter_number: letterResult.letterNumber,
+            verification_code: letterResult.verificationCode,
+            verification_url: letterResult.verificationUrl,
+            pdf_path: letterResult.pdfPath,
+            expires_at: letterResult.expiresAt,
+          },
+        },
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
@@ -389,6 +409,19 @@ class SubmissionController {
         return res.status(400).json({
           error: 'Bad Request',
           message: error.message,
+        });
+      }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+        });
+      }
+      // Handle crypto errors
+      if (error.message && error.message.includes('decrypt')) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Passphrase tidak valid',
         });
       }
       next(error);
@@ -438,39 +471,6 @@ class SubmissionController {
     }
   }
 
-  // ==================== ADMIN ACTIONS ====================
-
-  /**
-   * POST /submissions/:id/issue - Issue submission (admin only)
-   */
-  async issueSubmission(req, res, next) {
-    try {
-      const { id } = req.params;
-
-      const submission = await submissionService.issueSubmission({
-        submissionId: id,
-      });
-
-      res.json({
-        message: 'Surat berhasil diterbitkan',
-        data: formatSubmissionResponse(submission),
-      });
-    } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: error.message,
-        });
-      }
-      if (error.code === 'BAD_REQUEST') {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: error.message,
-        });
-      }
-      next(error);
-    }
-  }
 }
 
 export default new SubmissionController();

@@ -4,17 +4,16 @@ import { authMiddleware, requireRole } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-// ==================== PUBLIC ROUTES (for verification) ====================
+// ==================== PUBLIC ROUTES ====================
 
-// GET /keys/public/current - Get current active Lurah's public key
-router.get('/public/current', keyController.getCurrentPublicKey.bind(keyController));
+// GET /keys/active - Get current active Lurah's public key
+router.get('/active', keyController.getCurrentPublicKey.bind(keyController));
 
 // GET /keys/public/:verificationCode - Get public key for a specific letter
 router.get('/public/:verificationCode', keyController.getPublicKeyByLetter.bind(keyController));
 
 // ==================== AUTHENTICATED ROUTES ====================
 
-// Apply auth middleware for remaining routes
 router.use(authMiddleware);
 
 // ==================== LURAH KEY MANAGEMENT ====================
@@ -25,7 +24,12 @@ router.post('/generate', requireRole('lurah'), keyController.generateKey.bind(ke
 // GET /keys/status - Check key status (Lurah only)
 router.get('/status', requireRole('lurah'), keyController.getKeyStatus.bind(keyController));
 
-// POST /keys/revoke - Revoke current key (Lurah only)
-router.post('/revoke', requireRole('lurah'), keyController.revokeKey.bind(keyController));
+// ==================== ADMIN KEY MANAGEMENT ====================
+
+// POST /keys/:id/revoke - Revoke a key (Admin only)
+router.post('/:id/revoke', requireRole('admin'), keyController.revokeKey.bind(keyController));
+
+// GET /keys - List all keys (Admin only)
+router.get('/', requireRole('admin'), keyController.listKeys.bind(keyController));
 
 export default router;

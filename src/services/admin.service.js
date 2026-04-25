@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 
+
 /**
  * Admin Service - Handles admin-related business logic
  */
@@ -376,6 +377,18 @@ class AdminService {
           },
         });
 
+        // Deactivate all ACTIVE keys for the demoted Lurah
+        await tx.lurahKey.updateMany({
+          where: {
+            lurahProfileId: currentLurahProfile.id,
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'INACTIVE',
+            deactivatedAt: new Date(),
+          },
+        });
+
         // Demote current Lurah to warga
         await tx.user.update({
           where: { id: currentLurahProfile.userId },
@@ -485,6 +498,18 @@ class AdminService {
         data: {
           isActive: false,
           akhirMenjabat: new Date(),
+        },
+      });
+
+      // Deactivate all ACTIVE keys for the demoted Lurah
+      await tx.lurahKey.updateMany({
+        where: {
+          lurahProfileId: currentLurahProfile.id,
+          status: 'ACTIVE',
+        },
+        data: {
+          status: 'INACTIVE',
+          deactivatedAt: new Date(),
         },
       });
 

@@ -161,11 +161,14 @@
         margin-bottom: 10px;
       }
 
+      tujuan-text {
+        font-weight: bold;
+      }
+
       .qr-code {
         width: 100px;
         height: 100px;
         margin: 10px auto;
-        border: 1px solid #000;
       }
 
       .qr-code img {
@@ -200,7 +203,7 @@
       <!-- KOP SURAT -->
       <div class="kop-surat">
         <div class="logo">
-          <img src="../../../public/logo/logo-kotatomohon.png" alt="Logo Kota Tomohon" />
+          <img src="{{LOGO_URL}}" alt="Logo Kota Tomohon" />
         </div>
         <div class="kop-text">
           <div class="kop-line-1">PEMERINTAH KOTA TOMOHON</div>
@@ -259,7 +262,9 @@
           </div>
         </div>
 
-        <p class="paragraf">Adalah benar warga di wilayah kami dan berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon. Surat keterangan ini dibuat sebagai {{TUJUAN}}.</p>
+        <p class="paragraf">
+          Adalah benar warga di wilayah kami dan berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon. Surat keterangan ini dibuat sebagai <span class="tujuan-text">{{TUJUAN}}</span>.
+        </p>
 
         <p class="paragraf">Demikian surat keterangan ini kami buat, untuk dapat dipergunakan sebagaimana mestinya.</p>
       </div>

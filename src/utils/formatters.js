@@ -306,6 +306,7 @@ export const formatIssuedLetterResponse = (letter) => ({
   keterangan: letter.keterangan,
   pdf_path: letter.pdfPath,
   signed_by: letter.signedBy.toString(),
+  signature_key_id: letter.signatureKeyId?.toString() || null,
   issued_at: letter.issuedAt,
   expires_at: letter.expiresAt,
   is_revoked: letter.isRevoked,

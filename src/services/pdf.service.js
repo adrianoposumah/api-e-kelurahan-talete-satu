@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
+import { PDFDocument, PDFName, PDFHexString } from 'pdf-lib';
 import QRCode from 'qrcode';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
@@ -8,9 +9,21 @@ import { existsSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public', 'letters');
+const DEFAULT_LOGO_PATH = join(__dirname, '..', '..', 'public', 'logo', 'logo-kotatomohon.png');
 
 /**
- * PDF Service - Handles PDF generation with QR codes and metadata
+ * PDF Service - Handles PDF generation with QR codes and XMP metadata embedding
+ *
+ * RESPONSIBILITIES:
+ * - Render HTML → PDF via Puppeteer
+ * - Generate QR codes for verification URLs
+ * - Embed cryptographic signature metadata into PDF XMP
+ * - Save signed PDFs to disk
+ *
+ * This module must NOT:
+ * - Perform hashing or signing
+ * - Access private keys
+ * - Build canonical data
  */
 class PdfService {
   constructor() {
@@ -52,6 +65,19 @@ class PdfService {
   }
 
   /**
+   * Load default logo and return as data URL for deterministic PDF rendering.
+   * @returns {Promise<string>} Data URL or empty string if logo file is unavailable
+   */
+  async getDefaultLogoDataUrl() {
+    try {
+      const logoBuffer = await readFile(DEFAULT_LOGO_PATH);
+      return `data:image/png;base64,${logoBuffer.toString('base64')}`;
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * Ensure public directory exists
    * @returns {Promise<void>}
    */
@@ -62,7 +88,7 @@ class PdfService {
   }
 
   /**
-   * Render HTML to PDF
+   * Render HTML to PDF buffer via Puppeteer
    * @param {string} html - HTML content
    * @param {object} options - PDF options
    * @returns {Promise<Buffer>} PDF buffer
@@ -95,46 +121,98 @@ class PdfService {
   }
 
   /**
-   * Create PDF with embedded metadata
-   * @param {string} html - HTML content
-   * @param {object} metadata - PDF metadata
-   * @returns {Promise<Buffer>} PDF buffer with metadata
+   * Embed cryptographic signature metadata into PDF using pdf-lib.
+   * Uses standard PDF Info Dictionary fields + custom named entries for crypto fields.
+   *
+   * @param {Buffer} pdfBuffer - Raw PDF buffer from Puppeteer
+   * @param {object} metadata - Signature metadata to embed
+   * @param {string} metadata.signatureAlgorithm - e.g. 'SHA256withRSA'
+   * @param {string} metadata.canonicalHash - SHA-256 hex hash of canonical data
+   * @param {string} metadata.signatureValue - Base64-encoded RSA signature
+   * @param {string} metadata.signatureKeyId - ID of key used to sign
+   * @param {string} metadata.verificationCode - Letter verification code
+   * @param {string} metadata.publicKeyFingerprint - Colon-separated hex fingerprint
+   * @param {string} metadata.canonicalPayload - Base64-encoded canonical JSON
+   * @param {string} metadata.letterNumber - Letter number for title
+   * @returns {Promise<Uint8Array>} Modified PDF bytes with embedded metadata
    */
-  async createPdfWithMetadata(html, _metadata) {
-    const browser = await this.getBrowser();
-    const page = await browser.newPage();
+  async embedSignatureMetadata(pdfBuffer, metadata) {
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
 
+    // Set standard PDF metadata
+    pdfDoc.setTitle(metadata.letterNumber ? `Surat ${metadata.letterNumber}` : 'Surat Elektronik');
+    pdfDoc.setSubject('Surat Elektronik Kelurahan Talete Satu');
+    pdfDoc.setAuthor('e-Kelurahan Talete Satu');
+    pdfDoc.setCreator('e-Kelurahan Digital Signature System');
+    pdfDoc.setProducer('e-Kelurahan Talete Satu');
+    pdfDoc.setKeywords([metadata.letterNumber || '', metadata.verificationCode || ''].filter(Boolean));
+
+    // Embed cryptographic fields as custom entries in the PDF Info Dictionary
+    // pdf-lib uses PDFName for keys and PDFHexString for Unicode-safe string values
+    const infoDict = pdfDoc.context.lookup(pdfDoc.context.trailerInfo.Info);
+
+    const cryptoFields = {
+      EKelurahan_SignatureAlgorithm: metadata.signatureAlgorithm || '',
+      EKelurahan_CanonicalHash: metadata.canonicalHash || '',
+      EKelurahan_SignatureValue: metadata.signatureValue || '',
+      EKelurahan_SignatureKeyId: metadata.signatureKeyId || '',
+      EKelurahan_VerificationCode: metadata.verificationCode || '',
+      EKelurahan_LetterNumber: metadata.letterNumber || '',
+      EKelurahan_PublicKeyFingerprint: metadata.publicKeyFingerprint || '',
+      EKelurahan_IssuedDate: metadata.issuedDate || new Date().toISOString(),
+      EKelurahan_CanonicalPayload: metadata.canonicalPayload || '',
+    };
+
+    for (const [key, value] of Object.entries(cryptoFields)) {
+      infoDict.set(PDFName.of(key), PDFHexString.fromText(value));
+    }
+
+    return await pdfDoc.save();
+  }
+
+  /**
+   * Parse embedded signature metadata from a PDF buffer.
+   * Reads the custom EKelurahan_* entries from the PDF Info Dictionary.
+   *
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @returns {Promise<object|null>} Parsed metadata or null if not found
+   */
+  async readSignatureMetadata(pdfBuffer) {
     try {
-      await page.setContent(html, {
-        waitUntil: 'networkidle0',
-      });
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const infoDict = pdfDoc.context.lookup(pdfDoc.context.trailerInfo.Info);
 
-      // Generate PDF
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '0',
-          right: '0',
-          bottom: '0',
-          left: '0',
-        },
-        displayHeaderFooter: false,
-      });
+      if (!infoDict) return null;
 
-      // Note: For production, you would use a library like pdf-lib
-      // to embed custom metadata into the PDF. For now, we'll store
-      // the metadata separately in the database.
+      const readField = (name) => {
+        const value = infoDict.lookup(PDFName.of(name));
+        if (!value) return null;
+        // PDFHexString and PDFString both have decodeText()
+        return value.decodeText ? value.decodeText() : value.toString();
+      };
 
-      return pdfBuffer;
-    } finally {
-      await page.close();
+      const verificationCode = readField('EKelurahan_VerificationCode');
+      if (!verificationCode) return null; // No embedded crypto metadata
+
+      return {
+        signatureAlgorithm: readField('EKelurahan_SignatureAlgorithm'),
+        canonicalHash: readField('EKelurahan_CanonicalHash'),
+        signatureValue: readField('EKelurahan_SignatureValue'),
+        signatureKeyId: readField('EKelurahan_SignatureKeyId'),
+        verificationCode,
+        letterNumber: readField('EKelurahan_LetterNumber'),
+        publicKeyFingerprint: readField('EKelurahan_PublicKeyFingerprint'),
+        issuedDate: readField('EKelurahan_IssuedDate'),
+        canonicalPayload: readField('EKelurahan_CanonicalPayload'),
+      };
+    } catch {
+      return null;
     }
   }
 
   /**
    * Save PDF to public folder
-   * @param {Buffer} pdfBuffer - PDF buffer
+   * @param {Buffer|Uint8Array} pdfBuffer - PDF buffer
    * @param {string} filename - Filename without extension
    * @returns {Promise<object>} File paths (absolute and relative)
    */
@@ -154,61 +232,51 @@ class PdfService {
   }
 
   /**
-   * Generate complete PDF for a letter with embedded cryptographic metadata
+   * Generate complete signed PDF for a letter.
    *
-   * PDF RENDERER RESPONSIBILITIES:
-   * - Embed signature artifacts from crypto module
-   * - Generate QR code for verification
-   * - Save PDF to storage
-   *
-   * This module must NOT:
-   * - Perform hashing or signing
-   * - Access private keys
-   * - Build canonical data
+   * Pipeline:
+   * 1. Generate QR code data URL
+   * 2. Inject QR into HTML template
+   * 3. Render HTML → PDF via Puppeteer
+   * 4. Embed cryptographic signature metadata via pdf-lib
+   * 5. Save signed PDF to disk
    *
    * @param {object} params - PDF generation parameters
    * @returns {Promise<object>} PDF generation result
    */
-  async generateLetterPdf({ html, verificationCode, verificationUrl, letterNumber, signatureData }) {
-    // Generate QR code for verification URL
-    const qrCodeData = await this.generateQRCode(verificationUrl);
+  async generateLetterPdf({ html, verificationCode, verificationUrl, letterNumber, issuedDate, signatureData }) {
+    // Phase 2: Generate QR code and resolve logo as embedded data URLs.
+    const [qrCodeData, logoDataUrl] = await Promise.all([this.generateQRCode(verificationUrl), this.getDefaultLogoDataUrl()]);
 
-    // Replace QR code placeholder in HTML
-    const htmlWithQr = html.replace('{{QR_CODE_DATA}}', qrCodeData);
+    // Inject image sources directly into the HTML to avoid path/network loading issues.
+    const htmlWithAssets = html.replaceAll('{{QR_CODE_DATA}}', qrCodeData).replaceAll('{{LOGO_URL}}', logoDataUrl).replaceAll('../../../public/logo/logo-kotatomohon.png', logoDataUrl);
 
-    // Embed cryptographic metadata as per specification
-    const pdfBuffer = await this.createPdfWithMetadata(htmlWithQr, {
-      // Standard PDF metadata
-      title: `Surat ${letterNumber}`,
-      subject: 'Surat Elektronik Kelurahan Talete Satu',
-      author: 'e-Kelurahan Talete Satu',
-      creator: 'e-Kelurahan System',
-      keywords: [letterNumber, verificationCode].join(', '),
+    // Phase 3: Render HTML → PDF bytes
+    const rawPdfBuffer = await this.renderToPdf(htmlWithAssets);
 
-      // Cryptographic metadata (from crypto module)
-      SignatureAlgorithm: signatureData?.algorithm || 'SHA256withRSA',
-      CanonicalHash: signatureData?.canonicalHash || '',
-      SignatureValue: signatureData?.signature || '',
-      VerificationCode: verificationCode,
-      PublicKeyFingerprint: signatureData?.publicKeyFingerprint || '',
-      IssuedDate: new Date().toISOString(),
-
-      // Canonical payload (base64-encoded for embedding)
-      CanonicalPayload: signatureData?.canonicalData ? Buffer.from(signatureData.canonicalData).toString('base64') : '',
+    // Phase 5: Embed cryptographic signature into PDF XMP metadata
+    const signedPdfBytes = await this.embedSignatureMetadata(rawPdfBuffer, {
+      signatureAlgorithm: signatureData?.algorithm || 'SHA256withRSA',
+      canonicalHash: signatureData?.canonicalHash || '',
+      signatureValue: signatureData?.signature || '',
+      signatureKeyId: signatureData?.signatureKeyId || '',
+      verificationCode,
+      publicKeyFingerprint: signatureData?.publicKeyFingerprint || '',
+      issuedDate: issuedDate || new Date().toISOString(),
+      canonicalPayload: signatureData?.canonicalData ? Buffer.from(signatureData.canonicalData).toString('base64') : '',
+      letterNumber,
     });
 
-    // Generate filename from verification code
+    // Phase 6: Save signed PDF to disk
     const filename = `letter_${verificationCode}`;
-
-    // Save PDF to public folder
-    const { absolutePath, relativePath } = await this.savePdf(pdfBuffer, filename);
+    const { absolutePath, relativePath } = await this.savePdf(signedPdfBytes, filename);
 
     return {
       absolutePath,
       relativePath, // This is what gets stored in database
       filename: `${filename}.pdf`,
       qrCodeData,
-      size: pdfBuffer.length,
+      size: signedPdfBytes.length,
     };
   }
 

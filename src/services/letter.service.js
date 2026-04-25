@@ -6,35 +6,34 @@ import pdfService from './pdf.service.js';
 import env from '../config/env.js';
 
 /**
- * Letter Service - Orchestrates the letter issuance workflow
+ * Letter Service - Letter number, QR, PDF generation, signing
+ *
+ * Orchestrates the 7-phase letter issuance pipeline triggered
+ * when the Lurah approves a submission.
  */
 class LetterService {
   /**
-   * Generate letter number
+   * Generate letter number using atomic LetterCounter.
+   * Format: {sequence}/2009/D.15/{roman_month}/{year}
    * @param {string} type - Letter type
-   * @param {object} schema - Letter schema
    * @returns {Promise<string>} Letter number
    */
-  async generateLetterNumber(type, schema) {
+  async generateLetterNumber(type) {
     const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const month = new Date().getMonth() + 1;
 
-    // Get count of letters this year for this type
-    const count = await prisma.issuedLetter.count({
-      where: {
-        type,
-        createdAt: {
-          gte: new Date(`${year}-01-01`),
-          lt: new Date(`${year + 1}-01-01`),
-        },
-      },
-    });
+    // Atomic increment via SQL upsert — avoids stale Prisma client model access issues.
+    const rows = await prisma.$queryRaw`
+      INSERT INTO letter_counters (letter_type, year, sequence)
+      VALUES (${type}, ${year}, 1)
+      ON CONFLICT (letter_type, year)
+      DO UPDATE SET sequence = letter_counters.sequence + 1
+      RETURNING sequence
+    `;
 
-    const sequenceNumber = String(count + 1).padStart(4, '0');
-    const prefix = schema.letterPrefix || type.toUpperCase().substring(0, 2);
-
-    // Format: {sequence}/{year}/{prefix}/{month}/{year}
-    return `${sequenceNumber}/${year}/${prefix}/${this.getRomanMonth(parseInt(month))}/${year}`;
+    const sequence = Number(rows?.[0]?.sequence || 1);
+    const seq = String(sequence).padStart(4, '0');
+    return `${seq}/2009/D.15/${this.getRomanMonth(month)}/${year}`;
   }
 
   /**
@@ -48,12 +47,11 @@ class LetterService {
   }
 
   /**
-   * Get Lurah info for signing
-   * @returns {Promise<object>} Lurah info
+   * Get Lurah info and active key for signing
+   * @returns {Promise<object>} { keyRecord, lurahProfile, lurahName, lurahNip }
    */
   async getLurahInfo() {
     const { keyRecord, lurahProfile } = await cryptoService.getActiveLurahKey();
-
     return {
       keyRecord,
       lurahProfile,
@@ -63,47 +61,31 @@ class LetterService {
   }
 
   /**
-   * Build full letter number from admin input
-   * Format: {nomor_surat}/2009/D.15/I/{tahun}
-   * @param {string} nomorSurat - Custom number from admin
-   * @returns {string} Full letter number
-   */
-  buildLetterNumber(nomorSurat) {
-    const year = new Date().getFullYear();
-    return `${nomorSurat}/2009/D.15/I/${year}`;
-  }
-
-  /**
-   * Validate letter number format and uniqueness
-   * @param {string} letterNumber - Full letter number
-   * @returns {Promise<void>}
-   */
-  async validateLetterNumber(letterNumber) {
-    // Check if letter number already exists
-    const existing = await prisma.issuedLetter.findUnique({
-      where: { letterNumber },
-    });
-
-    if (existing) {
-      const error = new Error('Nomor surat sudah digunakan');
-      error.code = 'CONFLICT';
-      throw error;
-    }
-  }
-
-  /**
-   * Issue a letter for an approved submission
+   * Issue a letter when the Lurah approves a submission.
+   *
+   * Executes a 7-phase pipeline per AGENTS.md:
+   *   [1] Generate letter number (auto via LetterCounter)
+   *   [2] Generate QR code data URL
+   *   [3] Render HTML template → generate PDF bytes
+   *   [4] Build canonical payload → compute hash → RSA-sign with lurah private key
+   *   [5] Embed signature into PDF XMP metadata
+   *   [6] Save signed PDF to disk
+   *   [7] Update submission record → status APPROVED
+   *
    * @param {object} params - Issue parameters
-   * @returns {Promise<object>} Issued letter
+   * @param {string|BigInt} params.submissionId - Submission ID
+   * @param {string|BigInt} params.lurahUserId - Lurah user ID (from req.user)
+   * @param {string} params.passphrase - Passphrase to decrypt private key
+   * @param {string} [params.note] - Lurah approval note
+   * @param {string} [params.keterangan] - Additional description for the letter
+   * @returns {Promise<object>} Issued letter result
    */
-  async issueLetter({ submissionId, passphrase, nomorSurat, keterangan }) {
-    // Get submission with all relations
+  async issueLetter({ submissionId, lurahUserId, passphrase, note, keterangan }) {
+    // ---- Validations ----
     const submission = await prisma.submission.findUnique({
       where: { id: BigInt(submissionId) },
       include: {
-        user: {
-          include: { kependudukan: true },
-        },
+        user: { include: { kependudukan: true } },
         lingkungan: true,
         documents: true,
         approvals: {
@@ -120,8 +102,8 @@ class LetterService {
       throw error;
     }
 
-    if (submission.status !== 'approved') {
-      const error = new Error('Submission belum disetujui oleh Lurah');
+    if (submission.status !== 'pending_lurah') {
+      const error = new Error('Submission tidak dalam status pending_lurah');
       error.code = 'BAD_REQUEST';
       throw error;
     }
@@ -138,26 +120,22 @@ class LetterService {
       throw error;
     }
 
-    // Validate nomor surat from admin
-    if (!nomorSurat) {
-      const error = new Error('Nomor surat wajib diisi');
+    if (!passphrase) {
+      const error = new Error('Passphrase wajib diisi untuk menandatangani surat');
       error.code = 'BAD_REQUEST';
       throw error;
     }
 
-    // Build full letter number: {nomor_surat}/2009/D.15/I/{tahun}
-    const letterNumber = this.buildLetterNumber(nomorSurat);
-
-    // Check letter number uniqueness
-    await this.validateLetterNumber(letterNumber);
+    // ==================== PHASE 1: Generate letter number ====================
+    const letterNumber = await this.generateLetterNumber(submission.type);
 
     // Get template schema
     const schema = await templateService.getSchema(submission.type);
 
-    // Generate verification code
+    // Generate verification code (16 char hex)
     const verificationCode = uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase();
 
-    // Get Lurah info
+    // Get Lurah info and active key
     const { keyRecord, lurahName, lurahNip } = await this.getLurahInfo();
 
     // Build verification URL
@@ -169,14 +147,13 @@ class LetterService {
       letterNumber,
       lurahName,
       lurahNip,
-      logoUrl: `${baseUrl}/assets/logo-tomohon.png`,
       verificationUrl,
     });
 
-    // ==================== CRYPTOGRAPHIC SIGNING PHASE ====================
-    // Following strict separation of concerns
+    // ==================== PHASE 3: Render HTML template ====================
+    const html = await templateService.renderTemplate(submission.type, templateData);
 
-    // Prepare letter data for canonical construction
+    // ==================== PHASE 4: Build canonical → hash → sign ====================
     const letterData = {
       type: submission.type,
       nomorSurat: letterNumber,
@@ -187,7 +164,6 @@ class LetterService {
       tujuan: submission.payload?.tujuan || null,
     };
 
-    // Prepare issuer data
     const issuerData = {
       namaLurah: lurahName,
       nipLurah: lurahNip,
@@ -196,25 +172,22 @@ class LetterService {
       kota: 'Tomohon',
     };
 
-    // Prepare metadata
+    const issuedDate = new Date().toISOString();
     const metadata = {
       verificationCode,
-      issuedDate: new Date().toISOString(),
+      issuedDate,
     };
 
-    // Call cryptographic module to produce signature artifacts
-    // This module handles: canonical data, hashing, and signing
-    const signatureData = await cryptoService.createLetterSignature(letterData, issuerData, metadata, keyRecord.lurahProfileId.toString(), passphrase);
+    // Sign with Lurah's private key (passphrase decrypts it)
+    const signatureData = await cryptoService.createLetterSignature(letterData, issuerData, metadata, keyRecord, passphrase);
 
-    // Render HTML template
-    const html = await templateService.renderTemplate(submission.type, templateData);
-
-    // Generate PDF with QR code
+    // ==================== PHASES 2, 5, 6: QR + Embed XMP + Save PDF ====================
     const pdfResult = await pdfService.generateLetterPdf({
       html,
       verificationCode,
       verificationUrl,
       letterNumber,
+      issuedDate,
       signatureData,
     });
 
@@ -225,29 +198,59 @@ class LetterService {
       expiresAt.setDate(expiresAt.getDate() + schema.validityDays);
     }
 
-    // Create issued letter record and update submission in transaction
+    // ==================== PHASE 7: Update submission record → status APPROVED ====================
     const result = await prisma.$transaction(async (tx) => {
-      // Create issued letter
-      const issuedLetter = await tx.issuedLetter.create({
+      // Create lurah approval record
+      await tx.submissionApproval.create({
         data: {
           submissionId: BigInt(submissionId),
-          letterNumber,
-          verificationCode,
-          type: submission.type,
-          keterangan: keterangan || null,
-          canonicalData: signatureData.canonicalData,
-          canonicalHash: signatureData.canonicalHash,
-          signature: signatureData.signature,
-          signedBy: keyRecord.lurahProfileId, // Store lurahProfile ID
-          pdfPath: pdfResult.relativePath, // Store relative path for public access
-          expiresAt,
+          approvedBy: BigInt(lurahUserId),
+          stage: 'lurah',
+          status: 'approved',
+          note: note || null,
         },
       });
 
-      // Update submission status to issued
+      // Create issued letter record. If runtime Prisma client is stale and does not
+      // expose `signatureKeyId` yet, retry without it so signing flow stays available.
+      const issuedLetterData = {
+        submissionId: BigInt(submissionId),
+        letterNumber,
+        verificationCode,
+        type: submission.type,
+        keterangan: keterangan || null,
+        canonicalData: signatureData.canonicalData,
+        canonicalHash: signatureData.canonicalHash,
+        signature: signatureData.signature,
+        signedBy: keyRecord.lurahProfileId,
+        pdfPath: pdfResult.relativePath,
+        expiresAt,
+      };
+
+      let issuedLetter;
+      try {
+        issuedLetter = await tx.issuedLetter.create({
+          data: {
+            ...issuedLetterData,
+            signatureKeyId: keyRecord.id,
+          },
+        });
+      } catch (error) {
+        const isUnknownSignatureKeyId = error?.name === 'PrismaClientValidationError' && String(error?.message || '').includes('Unknown argument `signatureKeyId`');
+
+        if (!isUnknownSignatureKeyId) {
+          throw error;
+        }
+
+        issuedLetter = await tx.issuedLetter.create({
+          data: issuedLetterData,
+        });
+      }
+
+      // Update submission status to approved (letter generated + digitally signed)
       await tx.submission.update({
         where: { id: BigInt(submissionId) },
-        data: { status: 'issued' },
+        data: { status: 'approved' },
       });
 
       return issuedLetter;
@@ -263,6 +266,8 @@ class LetterService {
     };
   }
 
+  // ==================== LETTER QUERIES ====================
+
   /**
    * Get issued letter by verification code
    * @param {string} verificationCode - Verification code
@@ -274,9 +279,7 @@ class LetterService {
       include: {
         submission: {
           include: {
-            user: {
-              include: { kependudukan: true },
-            },
+            user: { include: { kependudukan: true } },
             lingkungan: true,
           },
         },
@@ -292,6 +295,8 @@ class LetterService {
     return letter;
   }
 
+  // ==================== VERIFICATION ====================
+
   /**
    * Verify letter authenticity
    * @param {string} verificationCode - Verification code
@@ -300,13 +305,13 @@ class LetterService {
   async verifyLetter(verificationCode) {
     const letter = await this.getLetterByVerificationCode(verificationCode);
 
-    // Get the public key used for signing (signedBy now stores lurahProfileId)
-    const keyRecord = await prisma.lurahKey.findFirst({
-      where: {
-        lurahProfileId: letter.signedBy,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Look up the public key — prefer signatureKeyId (exact match)
+    const keyRecord = letter.signatureKeyId
+      ? await prisma.lurahKey.findUnique({ where: { id: letter.signatureKeyId } })
+      : await prisma.lurahKey.findFirst({
+          where: { lurahProfileId: letter.signedBy },
+          orderBy: { createdAt: 'desc' },
+        });
 
     if (!keyRecord) {
       return {
@@ -316,7 +321,7 @@ class LetterService {
       };
     }
 
-    // Verify signature
+    // Verify digital signature
     const isValid = cryptoService.verifyLetterSignature(letter.canonicalData, letter.signature, keyRecord.publicKey);
 
     // Check revocation
@@ -374,38 +379,24 @@ class LetterService {
     };
   }
 
+  // ==================== LETTER ACCESS ====================
+
   /**
    * Get issued letters for a user
-   * @param {object} options - Query options
-   * @returns {Promise<object>} Letters and pagination
    */
   async getLettersByUser({ userId, page = 1, limit = 10 }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [letters, total] = await Promise.all([
       prisma.issuedLetter.findMany({
-        where: {
-          submission: {
-            userId: BigInt(userId),
-          },
-        },
+        where: { submission: { userId: BigInt(userId) } },
         skip,
         take: parseInt(limit),
         orderBy: { issuedAt: 'desc' },
-        include: {
-          submission: {
-            include: {
-              lingkungan: true,
-            },
-          },
-        },
+        include: { submission: { include: { lingkungan: true } } },
       }),
       prisma.issuedLetter.count({
-        where: {
-          submission: {
-            userId: BigInt(userId),
-          },
-        },
+        where: { submission: { userId: BigInt(userId) } },
       }),
     ]);
 
@@ -421,13 +412,10 @@ class LetterService {
   }
 
   /**
-   * Get all issued letters (admin)
-   * @param {object} options - Query options
-   * @returns {Promise<object>} Letters and pagination
+   * Get all issued letters (admin/lurah)
    */
   async getAllLetters({ page = 1, limit = 10, type }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
-
     const where = {};
     if (type) where.type = type;
 
@@ -440,9 +428,7 @@ class LetterService {
         include: {
           submission: {
             include: {
-              user: {
-                include: { kependudukan: true },
-              },
+              user: { include: { kependudukan: true } },
               lingkungan: true,
             },
           },
@@ -462,10 +448,10 @@ class LetterService {
     };
   }
 
+  // ==================== REVOCATION ====================
+
   /**
    * Revoke an issued letter
-   * @param {object} params - Revocation parameters
-   * @returns {Promise<object>} Updated letter
    */
   async revokeLetter({ verificationCode, reason }) {
     const letter = await this.getLetterByVerificationCode(verificationCode);
@@ -476,7 +462,7 @@ class LetterService {
       throw error;
     }
 
-    const updatedLetter = await prisma.issuedLetter.update({
+    return prisma.issuedLetter.update({
       where: { id: letter.id },
       data: {
         isRevoked: true,
@@ -486,35 +472,24 @@ class LetterService {
       include: {
         submission: {
           include: {
-            user: {
-              include: { kependudukan: true },
-            },
+            user: { include: { kependudukan: true } },
             lingkungan: true,
           },
         },
       },
     });
-
-    return updatedLetter;
   }
 
   /**
-   * Get PDF file path for a letter
-   * @param {string} verificationCode - Verification code
-   * @param {string} userId - User ID (for access control)
-   * @param {string} userRole - User role
-   * @returns {Promise<string>} PDF file path
+   * Get PDF file path for a letter (with access control)
    */
   async getLetterPdfPath(verificationCode, userId, userRole) {
     const letter = await this.getLetterByVerificationCode(verificationCode);
 
-    // Check access
     const isOwner = letter.submission.userId.toString() === userId.toString();
-    const isAdmin = userRole === 'admin';
-    const isLurah = userRole === 'lurah';
-    const isSekertaris = userRole === 'sekertaris';
+    const isPrivileged = ['admin', 'lurah', 'sekertaris'].includes(userRole);
 
-    if (!isOwner && !isAdmin && !isLurah && !isSekertaris) {
+    if (!isOwner && !isPrivileged) {
       const error = new Error('Anda tidak memiliki akses ke surat ini');
       error.code = 'FORBIDDEN';
       throw error;

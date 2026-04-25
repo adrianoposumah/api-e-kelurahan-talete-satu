@@ -210,8 +210,8 @@ class TemplateService {
       nip_lurah: options.lurahNip || '',
 
       // URLs
-      logo_url: options.logoUrl || '',
-      qr_code_data: options.qrCodeData || '',
+      logo_url: options.logoUrl ?? '{{LOGO_URL}}',
+      qr_code_data: options.qrCodeData ?? '{{QR_CODE_DATA}}',
       verification_url: options.verificationUrl || '',
 
       // Spread payload fields

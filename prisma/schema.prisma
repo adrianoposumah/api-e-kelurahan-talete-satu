@@ -309,20 +309,35 @@ model SekertarisProfile {
   @@map("sekertaris_profiles")
 }
 
+// Key status enum for lurah key lifecycle
+enum KeyStatus {
+  ACTIVE
+  REVOKED
+  INACTIVE
+}
+
 // Lurah key pairs for digital signatures
 model LurahKey {
-  id              BigInt        @id @default(autoincrement()) @db.BigInt
-  lurahProfileId  BigInt        @map("lurah_profile_id") @db.BigInt
-  publicKey       String        @map("public_key") @db.Text
-  privateKey      String        @map("private_key") @db.Text // Encrypted
-  algorithm       String        @default("RSA-SHA256") @db.VarChar(50)
-  isActive        Boolean       @default(true) @map("is_active")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id                  BigInt        @id @default(autoincrement()) @db.BigInt
+  lurahProfileId      BigInt        @map("lurah_profile_id") @db.BigInt
+  publicKey           String        @map("public_key") @db.Text
+  encryptedPrivateKey String        @map("encrypted_private_key") @db.Text
+  algorithm           String        @default("RSA-SHA256") @db.VarChar(50)
+  status              KeyStatus     @default(ACTIVE)
+
+  // Deactivation tracking
+  deactivatedAt       DateTime?     @map("deactivated_at")
+  deactivatedById     BigInt?       @map("deactivated_by_id") @db.BigInt
+  deactivateReason    String?       @map("deactivate_reason") @db.Text
+
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  lurahProfile    LurahProfile  @relation(fields: [lurahProfileId], references: [id], onDelete: Cascade)
+  lurahProfile        LurahProfile  @relation(fields: [lurahProfileId], references: [id], onDelete: Cascade)
 
+  @@index([status])
+  @@index([lurahProfileId])
   @@map("lurah_keys")
 }
 
@@ -340,6 +355,7 @@ model IssuedLetter {
   canonicalHash   String     @map("canonical_hash") @db.VarChar(64) // SHA256 hex
   signature       String     @db.Text // Base64 encoded signature
   signedBy        BigInt     @map("signed_by") @db.BigInt
+  signatureKeyId  BigInt?    @map("signature_key_id") @db.BigInt
   
   // File paths
   pdfPath         String     @map("pdf_path") @db.VarChar(255)
@@ -357,5 +373,16 @@ model IssuedLetter {
   // Relations
   submission      Submission @relation(fields: [submissionId], references: [id])
 
+  @@index([signatureKeyId])
   @@map("issued_letters")
+}
+
+// Atomic per-type per-year sequence counter for letter numbers
+model LetterCounter {
+  letterType String @map("letter_type")
+  year       Int
+  sequence   Int    @default(0)
+
+  @@id([letterType, year])
+  @@map("letter_counters")
 }

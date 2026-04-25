@@ -44,9 +44,4 @@ router.post('/:id/lurah/approve', requireRole('lurah', 'sekertaris'), submission
 // POST /submissions/:id/lurah/reject - Reject by lurah
 router.post('/:id/lurah/reject', requireRole('lurah', 'sekertaris'), submissionController.rejectByLurah.bind(submissionController));
 
-// ==================== ADMIN ROUTES ====================
-
-// POST /submissions/:id/issue - Issue submission (admin only)
-router.post('/:id/issue', requireRole('admin'), submissionController.issueSubmission.bind(submissionController));
-
 export default router;

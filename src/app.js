@@ -14,6 +14,7 @@ import kependudukanRoutes from './routes/kependudukan.routes.js';
 import submissionRoutes from './routes/submission.routes.js';
 import letterRoutes from './routes/letter.routes.js';
 import keyRoutes from './routes/key.routes.js';
+import verificationRoutes from './routes/verification.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,6 +51,8 @@ app.use('/v1/data-kependudukan', kependudukanRoutes);
 app.use('/v1/submissions', submissionRoutes);
 app.use('/v1/letters', letterRoutes);
 app.use('/v1/keys', keyRoutes);
+app.use('/v1/verify', verificationRoutes);
+app.use('/verify', verificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
