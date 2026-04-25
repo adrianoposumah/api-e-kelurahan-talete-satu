@@ -1,5 +1,7 @@
 import submissionService from '../services/submission.service.js';
-import { formatSubmissionResponse, formatSubmissionDocumentResponse } from '../utils/formatters.js';
+import loadSubmissionSchema from '../lib/schemaLoader.js';
+import { validateSubmission } from '../validators/submission.validator.js';
+import { formatSubmissionResponse } from '../utils/formatters.js';
 
 /**
  * Submission Controller - Handles submission request/response
@@ -13,83 +15,55 @@ class SubmissionController {
   async createSubmission(req, res, next) {
     try {
       const userId = req.user.userId;
-      const { type, payload } = req.body;
+      const letterType = req.body.letter_type;
+      const schema = loadSubmissionSchema(letterType);
 
-      if (!type) {
+      if (!schema) {
         return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Tipe submission wajib diisi',
+          success: false,
+          message: `Unknown letter type: '${letterType || ''}'`,
         });
       }
 
-      const validTypes = ['domisili', 'usaha', 'kematian', 'kelakuan_baik', 'keramaian'];
-      if (!validTypes.includes(type)) {
+      const validation = validateSubmission(req.body, req.files, schema);
+      if (!validation.valid) {
         return res.status(400).json({
-          error: 'Bad Request',
-          message: `Tipe submission tidak valid. Pilihan: ${validTypes.join(', ')}`,
+          success: false,
+          message: 'Validation failed',
+          errors: validation.errors,
         });
+      }
+
+      const formData = {};
+      for (const field of schema.fields || []) {
+        if (Object.prototype.hasOwnProperty.call(req.body, field.name)) {
+          formData[field.name] = req.body[field.name];
+        }
+      }
+
+      const files = {};
+      for (const [fieldName, uploaded] of Object.entries(req.files || {})) {
+        const firstFile = Array.isArray(uploaded) ? uploaded[0] : null;
+        if (firstFile?.path) {
+          files[fieldName] = firstFile.path;
+        }
       }
 
       const submission = await submissionService.createSubmission({
         userId,
-        type,
-        payload,
+        letterType,
+        formData,
+        files,
       });
 
       res.status(201).json({
-        message: 'Submission berhasil dibuat',
-        data: formatSubmissionResponse(submission),
-      });
-    } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: error.message,
-        });
-      }
-      if (error.code === 'FORBIDDEN') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: error.message,
-        });
-      }
-      if (error.code === 'BAD_REQUEST') {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: error.message,
-        });
-      }
-      next(error);
-    }
-  }
-
-  /**
-   * POST /submissions/:id/documents - Add document to submission
-   */
-  async addDocument(req, res, next) {
-    try {
-      const { id } = req.params;
-      const userId = req.user.userId;
-      const { file_path, file_type, description } = req.body;
-
-      if (!file_path) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Path file wajib diisi',
-        });
-      }
-
-      const document = await submissionService.addDocument({
-        submissionId: id,
-        userId,
-        filePath: file_path,
-        fileType: file_type,
-        description,
-      });
-
-      res.status(201).json({
-        message: 'Dokumen berhasil ditambahkan',
-        data: formatSubmissionDocumentResponse(document),
+        success: true,
+        data: {
+          id: submission.id.toString(),
+          letterType: submission.type,
+          status: submission.status,
+          submittedAt: submission.createdAt,
+        },
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
@@ -259,49 +233,6 @@ class SubmissionController {
         pagination,
       });
     } catch (error) {
-      if (error.code === 'FORBIDDEN') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: error.message,
-        });
-      }
-      next(error);
-    }
-  }
-
-  /**
-   * PATCH /submissions/:id/documents/:documentId/verify - Verify document
-   */
-  async verifyDocument(req, res, next) {
-    try {
-      const { documentId } = req.params;
-      const keplingUserId = req.user.userId;
-      const { verified } = req.body;
-
-      if (typeof verified !== 'boolean') {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Status verified wajib diisi (boolean)',
-        });
-      }
-
-      const document = await submissionService.verifyDocument({
-        documentId,
-        keplingUserId,
-        verified,
-      });
-
-      res.json({
-        message: `Dokumen berhasil ${verified ? 'diverifikasi' : 'dibatalkan verifikasinya'}`,
-        data: formatSubmissionDocumentResponse(document),
-      });
-    } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: error.message,
-        });
-      }
       if (error.code === 'FORBIDDEN') {
         return res.status(403).json({
           error: 'Forbidden',

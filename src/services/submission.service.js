@@ -9,7 +9,7 @@ class SubmissionService {
    * @param {object} data - Submission data
    * @returns {Promise<object>} Created submission
    */
-  async createSubmission({ userId, type, payload }) {
+  async createSubmission({ userId, letterType, formData, files }) {
     // Get user with kependudukan to determine lingkungan
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -51,14 +51,27 @@ class SubmissionService {
       throw error;
     }
 
-    // Create submission with status pending_kepling
+    const documentRows = Object.entries(files || {}).map(([fileType, filePath]) => ({
+      filePath,
+      fileType,
+      description: null,
+    }));
+
+    // Create submission with status pending_kepling and uploaded documents
     const submission = await prisma.submission.create({
       data: {
         userId: BigInt(userId),
-        lingkunganId: lingkunganId,
-        type,
+        lingkunganId,
+        type: letterType,
         status: 'pending_kepling',
-        payload: payload || null,
+        payload: formData || null,
+        ...(documentRows.length > 0
+          ? {
+              documents: {
+                create: documentRows,
+              },
+            }
+          : {}),
       },
       include: {
         user: true,
@@ -78,48 +91,6 @@ class SubmissionService {
     });
 
     return submission;
-  }
-
-  /**
-   * Add document to submission
-   * @param {object} data - Document data
-   * @returns {Promise<object>} Created document
-   */
-  async addDocument({ submissionId, userId, filePath, fileType, description }) {
-    const submission = await prisma.submission.findUnique({
-      where: { id: BigInt(submissionId) },
-    });
-
-    if (!submission) {
-      const error = new Error('Submission tidak ditemukan');
-      error.code = 'NOT_FOUND';
-      throw error;
-    }
-
-    // Only the owner can add documents
-    if (submission.userId !== BigInt(userId)) {
-      const error = new Error('Anda tidak memiliki akses ke submission ini');
-      error.code = 'FORBIDDEN';
-      throw error;
-    }
-
-    // Can only add documents when pending
-    if (!['pending_kepling', 'pending_lurah'].includes(submission.status)) {
-      const error = new Error('Tidak dapat menambah dokumen pada submission yang sudah diproses');
-      error.code = 'BAD_REQUEST';
-      throw error;
-    }
-
-    const document = await prisma.submissionDocument.create({
-      data: {
-        submissionId: BigInt(submissionId),
-        filePath,
-        fileType: fileType || null,
-        description: description || null,
-      },
-    });
-
-    return document;
   }
 
   /**
@@ -314,50 +285,6 @@ class SubmissionService {
     }
 
     return submission;
-  }
-
-  /**
-   * Verify document (kepling only)
-   * @param {object} data - Verification data
-   * @returns {Promise<object>} Updated document
-   */
-  async verifyDocument({ documentId, keplingUserId, verified }) {
-    const document = await prisma.submissionDocument.findUnique({
-      where: { id: BigInt(documentId) },
-      include: {
-        submission: {
-          include: { lingkungan: true },
-        },
-      },
-    });
-
-    if (!document) {
-      const error = new Error('Dokumen tidak ditemukan');
-      error.code = 'NOT_FOUND';
-      throw error;
-    }
-
-    // Check if kepling is assigned to this lingkungan
-    const keplingAssignment = await prisma.lingkunganKepling.findFirst({
-      where: {
-        userId: BigInt(keplingUserId),
-        lingkunganId: document.submission.lingkunganId,
-        selesai: null,
-      },
-    });
-
-    if (!keplingAssignment) {
-      const error = new Error('Anda tidak memiliki akses ke dokumen ini');
-      error.code = 'FORBIDDEN';
-      throw error;
-    }
-
-    const updatedDocument = await prisma.submissionDocument.update({
-      where: { id: BigInt(documentId) },
-      data: { verified },
-    });
-
-    return updatedDocument;
   }
 
   /**

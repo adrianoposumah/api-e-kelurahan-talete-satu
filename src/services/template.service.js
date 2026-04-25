@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises';
+import { readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -20,7 +21,14 @@ class TemplateService {
    * @returns {string[]} List of letter types
    */
   getAvailableTypes() {
-    return ['domisili', 'usaha', 'kematian', 'kelakuan_baik', 'keramaian'];
+    try {
+      return readdirSync(TEMPLATES_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -36,9 +44,21 @@ class TemplateService {
     const schemaPath = join(TEMPLATES_DIR, type, 'schema.json');
     try {
       const content = await readFile(schemaPath, 'utf-8');
-      const schema = JSON.parse(content);
-      this.schemaCache.set(type, schema);
-      return schema;
+      const parsed = JSON.parse(content);
+      const fields = Array.isArray(parsed.fields) ? parsed.fields : Array.isArray(parsed.requiredFields) ? parsed.requiredFields : [];
+
+      const normalized = {
+        ...parsed,
+        name: parsed.name || parsed.label || type,
+        label: parsed.label || parsed.name || type,
+        fields,
+        files: Array.isArray(parsed.files) ? parsed.files : [],
+        requiredFields: Array.isArray(parsed.requiredFields) ? parsed.requiredFields : fields,
+        autoPopulatedFields: Array.isArray(parsed.autoPopulatedFields) ? parsed.autoPopulatedFields : [],
+      };
+
+      this.schemaCache.set(type, normalized);
+      return normalized;
     } catch {
       const err = new Error(`Template schema untuk tipe '${type}' tidak ditemukan`);
       err.code = 'NOT_FOUND';
