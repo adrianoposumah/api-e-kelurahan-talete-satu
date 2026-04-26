@@ -7,7 +7,3 @@
 /public/letters/*
 AGENTS.md
 /uploads
-
-verification.controller.js
-verification.service.js
-verification.routes.js
