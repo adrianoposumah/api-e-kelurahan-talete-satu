@@ -19,6 +19,9 @@ router.get('/', requireRole('warga'), submissionController.getMySubmissions.bind
 // GET /submissions/user/:id - Get own submission detail by ID (warga only)
 router.get('/user/:id', requireRole('warga'), submissionController.getSubmissionUserDetailById.bind(submissionController));
 
+// GET /submissions/:id/documents/:documentId - View or download a submission document
+router.get('/:id/documents/:documentId', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), submissionController.getSubmissionDocument.bind(submissionController));
+
 // DELETE /submissions/:id - Delete submission (owner only, pending_kepling status only)
 router.delete('/:id', requireRole('warga'), submissionController.deleteSubmission.bind(submissionController));
 

@@ -264,46 +264,74 @@ export const formatSubmissionByUserResponse = (submission) => ({
  * @param {object} submission - Submission object from database
  * @returns {object} Formatted submission object
  */
-export const formatSubmissionResponse = (submission) => ({
-  id: submission.id.toString(),
-  user_id: submission.userId.toString(),
-  lingkungan_id: submission.lingkunganId.toString(),
-  type: submission.type,
-  status: submission.status,
-  payload: submission.payload,
-  reject_reason: submission.rejectReason,
-  created_at: submission.createdAt,
-  updated_at: submission.updatedAt,
-  user: submission.user
-    ? {
-        id: submission.user.id.toString(),
-        nik: submission.user.nik,
-        nama: submission.user.nama,
-        no_hp: submission.user.noHp,
-        kependudukan: submission.user.kependudukan ? formatKependudukanResponse(submission.user.kependudukan) : undefined,
-      }
-    : undefined,
-  lingkungan: submission.lingkungan
-    ? {
-        ...formatLingkunganResponse(submission.lingkungan),
-        keplings: submission.lingkungan.keplings
-          ? submission.lingkungan.keplings.map((k) => ({
-              id: k.id.toString(),
-              user_id: k.userId.toString(),
-              user: k.user
-                ? {
-                    id: k.user.id.toString(),
-                    nama: k.user.nama,
-                    no_hp: k.user.noHp,
-                  }
-                : undefined,
-            }))
-          : undefined,
-      }
-    : undefined,
-  documents: submission.documents ? submission.documents.map(formatSubmissionDocumentResponse) : [],
-  approvals: submission.approvals ? submission.approvals.map(formatSubmissionApprovalResponse) : [],
-});
+export const formatSubmissionResponse = (submission, options = {}) => {
+  const baseUrl = options.baseUrl || '';
+
+  const buildDocumentUrl = (submissionId, documentId, download = false) => {
+    const relativeUrl = `/v1/submissions/${submissionId}/documents/${documentId}${download ? '?download=true' : ''}`;
+
+    if (!baseUrl) {
+      return relativeUrl;
+    }
+
+    return new URL(relativeUrl, baseUrl).toString();
+  };
+
+  return {
+    id: submission.id.toString(),
+    user_id: submission.userId.toString(),
+    lingkungan_id: submission.lingkunganId.toString(),
+    type: submission.type,
+    status: submission.status,
+    payload: submission.payload,
+    reject_reason: submission.rejectReason,
+    created_at: submission.createdAt,
+    updated_at: submission.updatedAt,
+    user: submission.user
+      ? {
+          id: submission.user.id.toString(),
+          nik: submission.user.nik,
+          nama: submission.user.nama,
+          no_hp: submission.user.noHp,
+          kependudukan: submission.user.kependudukan ? formatKependudukanResponse(submission.user.kependudukan) : undefined,
+        }
+      : undefined,
+    lingkungan: submission.lingkungan
+      ? {
+          ...formatLingkunganResponse(submission.lingkungan),
+          keplings: submission.lingkungan.keplings
+            ? submission.lingkungan.keplings.map((k) => ({
+                id: k.id.toString(),
+                user_id: k.userId.toString(),
+                user: k.user
+                  ? {
+                      id: k.user.id.toString(),
+                      nama: k.user.nama,
+                      no_hp: k.user.noHp,
+                    }
+                  : undefined,
+              }))
+            : undefined,
+        }
+      : undefined,
+    documents: submission.documents
+      ? submission.documents.map((document) => {
+          const submissionId = submission.id.toString();
+          const documentId = document.id.toString();
+          const viewUrl = buildDocumentUrl(submissionId, documentId, false);
+          const downloadUrl = buildDocumentUrl(submissionId, documentId, true);
+
+          return {
+            ...formatSubmissionDocumentResponse(document),
+            file_path: viewUrl,
+            view_url: viewUrl,
+            download_url: downloadUrl,
+          };
+        })
+      : [],
+    approvals: submission.approvals ? submission.approvals.map(formatSubmissionApprovalResponse) : [],
+  };
+};
 
 // ==================== ISSUED LETTER FORMATTERS ====================
 

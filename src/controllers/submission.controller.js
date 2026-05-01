@@ -1,12 +1,72 @@
+import { createReadStream, existsSync } from 'fs';
+import { basename, dirname, extname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
 import submissionService from '../services/submission.service.js';
 import loadSubmissionSchema from '../lib/schemaLoader.js';
 import { validateSubmission } from '../validators/submission.validator.js';
 import { formatSubmissionByUserResponse, formatSubmissionResponse } from '../utils/formatters.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, '..', '..');
+
+const MIME_TYPES = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+};
+
 /**
  * Submission Controller - Handles submission request/response
  */
 class SubmissionController {
+  buildBaseUrl(req) {
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const protocol = typeof forwardedProto === 'string' && forwardedProto.length > 0 ? forwardedProto.split(',')[0].trim() : req.protocol;
+
+    return `${protocol}://${req.get('host')}`;
+  }
+
+  formatSubmissionDetail(submission, req) {
+    return formatSubmissionResponse(submission, {
+      baseUrl: this.buildBaseUrl(req),
+    });
+  }
+
+  resolveDocumentPath(filePath) {
+    return resolve(PROJECT_ROOT, filePath);
+  }
+
+  getDocumentMimeType(filePath) {
+    return MIME_TYPES[extname(filePath).toLowerCase()] || 'application/octet-stream';
+  }
+
+  isDownloadRequest(req) {
+    const downloadValue = String(req.query.download || '').toLowerCase();
+    return downloadValue === '1' || downloadValue === 'true' || downloadValue === 'yes';
+  }
+
+  canAccessSubmission(submission, userId, userRole) {
+    const isOwner = submission.userId.toString() === userId.toString();
+    const isKepling = userRole === 'kepling';
+    const isLurah = userRole === 'lurah';
+    const isSekertaris = userRole === 'sekertaris';
+    const isAdmin = userRole === 'admin';
+
+    if (isKepling && !isOwner) {
+      const hasAccess = submission.lingkungan.keplings?.some((k) => k.userId.toString() === userId.toString());
+      return hasAccess;
+    }
+
+    if (userRole === 'warga') {
+      return isOwner;
+    }
+
+    return isOwner || isKepling || isLurah || isSekertaris || isAdmin;
+  }
+
   // ==================== CITIZEN (WARGA) ACTIONS ====================
 
   /**
@@ -125,7 +185,7 @@ class SubmissionController {
         userId,
       });
 
-      res.json(formatSubmissionResponse(submission));
+      res.json(this.formatSubmissionDetail(submission, req));
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({
@@ -148,42 +208,14 @@ class SubmissionController {
 
       const submission = await submissionService.getSubmissionById(id);
 
-      // Access control
-      const isOwner = submission.userId.toString() === userId.toString();
-      const isKepling = userRole === 'kepling';
-      const isLurah = userRole === 'lurah';
-      const isSekertaris = userRole === 'sekertaris';
-      const isAdmin = userRole === 'admin';
-
-      // Kepling can only view submissions from their lingkungan
-      if (isKepling && !isOwner) {
-        // Check if kepling is assigned to this lingkungan
-        const hasAccess = submission.lingkungan.keplings?.some((k) => k.userId.toString() === userId.toString());
-        if (!hasAccess) {
-          return res.status(403).json({
-            error: 'Forbidden',
-            message: 'Anda tidak memiliki akses ke submission ini',
-          });
-        }
-      }
-
-      // Warga can only view their own submissions
-      if (userRole === 'warga' && !isOwner) {
+      if (!this.canAccessSubmission(submission, userId, userRole)) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'Anda tidak memiliki akses ke submission ini',
         });
       }
 
-      // Lurah, Sekertaris, and Admin can view all
-      if (!isOwner && !isKepling && !isLurah && !isSekertaris && !isAdmin) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Anda tidak memiliki akses ke submission ini',
-        });
-      }
-
-      res.json(formatSubmissionResponse(submission));
+      res.json(this.formatSubmissionDetail(submission, req));
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({
@@ -279,7 +311,7 @@ class SubmissionController {
         keplingUserId,
       });
 
-      res.json(formatSubmissionResponse(submission));
+      res.json(this.formatSubmissionDetail(submission, req));
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({
@@ -314,7 +346,7 @@ class SubmissionController {
 
       res.json({
         message: 'Submission berhasil disetujui oleh Kepling',
-        data: formatSubmissionResponse(submission),
+        data: this.formatSubmissionDetail(submission, req),
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
@@ -357,7 +389,7 @@ class SubmissionController {
 
       res.json({
         message: 'Submission ditolak oleh Kepling',
-        data: formatSubmissionResponse(submission),
+        data: this.formatSubmissionDetail(submission, req),
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
@@ -417,7 +449,7 @@ class SubmissionController {
         submissionId: id,
       });
 
-      res.json(formatSubmissionResponse(submission));
+      res.json(this.formatSubmissionDetail(submission, req));
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({
@@ -458,7 +490,7 @@ class SubmissionController {
       res.json({
         message: 'Submission berhasil disetujui dan surat telah diterbitkan',
         data: {
-          submission: formatSubmissionResponse(submission),
+          submission: this.formatSubmissionDetail(submission, req),
           letter: {
             letter_number: letterResult.letterNumber,
             verification_code: letterResult.verificationCode,
@@ -522,7 +554,7 @@ class SubmissionController {
 
       res.json({
         message: 'Submission ditolak oleh Lurah',
-        data: formatSubmissionResponse(submission),
+        data: this.formatSubmissionDetail(submission, req),
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
@@ -540,6 +572,64 @@ class SubmissionController {
       if (error.code === 'BAD_REQUEST') {
         return res.status(400).json({
           error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/:id/documents/:documentId - View or download a submission document
+   */
+  async getSubmissionDocument(req, res, next) {
+    try {
+      const { id, documentId } = req.params;
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      const submission = await submissionService.getSubmissionById(id);
+
+      if (!this.canAccessSubmission(submission, userId, userRole)) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Anda tidak memiliki akses ke dokumen ini',
+        });
+      }
+
+      const document = submission.documents?.find((entry) => entry.id.toString() === documentId.toString());
+      if (!document) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Dokumen tidak ditemukan',
+        });
+      }
+
+      const absolutePath = this.resolveDocumentPath(document.filePath);
+      if (!existsSync(absolutePath)) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'File dokumen tidak ditemukan',
+        });
+      }
+
+      const inline = !this.isDownloadRequest(req);
+      const filename = basename(absolutePath);
+
+      res.setHeader('Content-Type', this.getDocumentMimeType(absolutePath));
+      res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
+
+      createReadStream(absolutePath).pipe(res);
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'FORBIDDEN') {
+        return res.status(403).json({
+          error: 'Forbidden',
           message: error.message,
         });
       }

@@ -99,7 +99,7 @@ class SubmissionService {
    * @param {object} options - Query options
    * @returns {Promise<object>} Submissions and pagination
    */
-  async getSubmissionsByUser({ userId, page = 1, limit = 10, status, type }) {
+  async getSubmissionsByUser({ userId, page = 1, limit = 50, status, type }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {
