@@ -1,7 +1,7 @@
 import submissionService from '../services/submission.service.js';
 import loadSubmissionSchema from '../lib/schemaLoader.js';
 import { validateSubmission } from '../validators/submission.validator.js';
-import { formatSubmissionResponse } from '../utils/formatters.js';
+import { formatSubmissionByUserResponse, formatSubmissionResponse } from '../utils/formatters.js';
 
 /**
  * Submission Controller - Handles submission request/response
@@ -94,21 +94,45 @@ class SubmissionController {
   async getMySubmissions(req, res, next) {
     try {
       const userId = req.user.userId;
-      const { page, limit, status, type } = req.query;
+      const { page, limit, status } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsByUser({
         userId,
         page,
         limit,
         status,
-        type,
       });
 
       res.json({
-        data: submissions.map(formatSubmissionResponse),
+        data: submissions.map(formatSubmissionByUserResponse),
         pagination,
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/user/:id - Get submission detail by ID for current user
+   */
+  async getSubmissionUserDetailById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.userId;
+
+      const submission = await submissionService.getSubmissionUserDetailById({
+        submissionId: id,
+        userId,
+      });
+
+      res.json(formatSubmissionResponse(submission));
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
       next(error);
     }
   }
@@ -218,21 +242,51 @@ class SubmissionController {
   async getSubmissionsForKepling(req, res, next) {
     try {
       const keplingUserId = req.user.userId;
-      const { page, limit, status, type } = req.query;
+      const { page, limit, status } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsForKepling({
         keplingUserId,
         page,
         limit,
         status,
-        type,
       });
 
       res.json({
-        data: submissions.map(formatSubmissionResponse),
+        data: submissions.map(formatSubmissionByUserResponse),
         pagination,
       });
     } catch (error) {
+      if (error.code === 'FORBIDDEN') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/kepling/:id - Get submission detail by ID for kepling
+   */
+  async getSubmissionKeplingDetailById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const keplingUserId = req.user.userId;
+
+      const submission = await submissionService.getSubmissionKeplingDetailById({
+        submissionId: id,
+        keplingUserId,
+      });
+
+      res.json(formatSubmissionResponse(submission));
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
       if (error.code === 'FORBIDDEN') {
         return res.status(403).json({
           error: 'Forbidden',
@@ -335,20 +389,42 @@ class SubmissionController {
    */
   async getSubmissionsForLurah(req, res, next) {
     try {
-      const { page, limit, status, type } = req.query;
+      const { page, limit, status } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsForLurah({
         page,
         limit,
         status,
-        type,
       });
 
       res.json({
-        data: submissions.map(formatSubmissionResponse),
+        data: submissions.map(formatSubmissionByUserResponse),
         pagination,
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/lurah/:id - Get submission detail by ID for lurah
+   */
+  async getSubmissionLurahDetailById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const submission = await submissionService.getSubmissionLurahDetailById({
+        submissionId: id,
+      });
+
+      res.json(formatSubmissionResponse(submission));
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
       next(error);
     }
   }
@@ -470,7 +546,6 @@ class SubmissionController {
       next(error);
     }
   }
-
 }
 
 export default new SubmissionController();

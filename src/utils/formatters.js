@@ -245,6 +245,21 @@ export const formatSubmissionApprovalResponse = (approval) => ({
 });
 
 /**
+ * Format submission list item for citizen endpoint
+ * @param {object} submission - Submission object from database
+ * @returns {object} Minimal formatted submission object
+ */
+export const formatSubmissionByUserResponse = (submission) => ({
+  id: submission.id.toString(),
+  user_id: submission.userId.toString(),
+  lingkungan_id: submission.lingkunganId.toString(),
+  type: submission.type,
+  status: submission.status,
+  created_at: submission.createdAt,
+  updated_at: submission.updatedAt,
+});
+
+/**
  * Format submission object for API response
  * @param {object} submission - Submission object from database
  * @returns {object} Formatted submission object

@@ -114,14 +114,14 @@ class SubmissionService {
         skip,
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: true,
-          lingkungan: true,
-          documents: true,
-          approvals: {
-            include: { approver: true },
-            orderBy: { createdAt: 'asc' },
-          },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
       prisma.submission.count({ where }),
@@ -136,6 +136,46 @@ class SubmissionService {
         total_pages: Math.ceil(total / parseInt(limit)),
       },
     };
+  }
+
+  /**
+   * Get submission detail by ID for the owner (warga)
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submission detail
+   */
+  async getSubmissionUserDetailById({ submissionId, userId }) {
+    const submission = await prisma.submission.findFirst({
+      where: {
+        id: BigInt(submissionId),
+        userId: BigInt(userId),
+      },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+        lingkungan: {
+          include: {
+            keplings: {
+              where: { selesai: null },
+              include: { user: true },
+            },
+          },
+        },
+        documents: true,
+        approvals: {
+          include: { approver: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!submission) {
+      const error = new Error('Submission tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return submission;
   }
 
   /**
@@ -174,16 +214,14 @@ class SubmissionService {
         skip,
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            include: { kependudukan: true },
-          },
-          lingkungan: true,
-          documents: true,
-          approvals: {
-            include: { approver: true },
-            orderBy: { createdAt: 'asc' },
-          },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
       prisma.submission.count({ where }),
@@ -198,6 +236,62 @@ class SubmissionService {
         total_pages: Math.ceil(total / parseInt(limit)),
       },
     };
+  }
+
+  /**
+   * Get submission detail by ID for kepling
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submission detail
+   */
+  async getSubmissionKeplingDetailById({ submissionId, keplingUserId }) {
+    // Get kepling's active lingkungan assignments
+    const keplingAssignments = await prisma.lingkunganKepling.findMany({
+      where: {
+        userId: BigInt(keplingUserId),
+        selesai: null,
+      },
+    });
+
+    if (keplingAssignments.length === 0) {
+      const error = new Error('Kepling tidak memiliki lingkungan yang ditugaskan');
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const lingkunganIds = keplingAssignments.map((a) => a.lingkunganId);
+
+    const submission = await prisma.submission.findFirst({
+      where: {
+        id: BigInt(submissionId),
+        lingkunganId: { in: lingkunganIds },
+      },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+        lingkungan: {
+          include: {
+            keplings: {
+              where: { selesai: null },
+              include: { user: true },
+            },
+          },
+        },
+        documents: true,
+        approvals: {
+          include: { approver: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!submission) {
+      const error = new Error('Submission tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return submission;
   }
 
   /**
@@ -218,23 +312,14 @@ class SubmissionService {
         skip,
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            include: { kependudukan: true },
-          },
-          lingkungan: {
-            include: {
-              keplings: {
-                where: { selesai: null },
-                include: { user: true },
-              },
-            },
-          },
-          documents: true,
-          approvals: {
-            include: { approver: true },
-            orderBy: { createdAt: 'asc' },
-          },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
       prisma.submission.count({ where }),
@@ -249,6 +334,43 @@ class SubmissionService {
         total_pages: Math.ceil(total / parseInt(limit)),
       },
     };
+  }
+
+  /**
+   * Get submission detail by ID for lurah
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submission detail
+   */
+  async getSubmissionLurahDetailById({ submissionId }) {
+    const submission = await prisma.submission.findUnique({
+      where: { id: BigInt(submissionId) },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+        lingkungan: {
+          include: {
+            keplings: {
+              where: { selesai: null },
+              include: { user: true },
+            },
+          },
+        },
+        documents: true,
+        approvals: {
+          include: { approver: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!submission) {
+      const error = new Error('Submission tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return submission;
   }
 
   /**
@@ -583,7 +705,6 @@ class SubmissionService {
 
     return result;
   }
-
 
   /**
    * Delete submission (owner only, only if still pending_kepling)
