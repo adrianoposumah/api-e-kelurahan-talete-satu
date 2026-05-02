@@ -1,7 +1,6 @@
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+// Use the application's configured Prisma client which may use a custom adapter
+import prisma from '../src/config/prisma.js';
 
 function randomDigits(length) {
   let s = '';
