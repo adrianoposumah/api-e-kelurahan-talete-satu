@@ -122,6 +122,11 @@ class SubmissionService {
           status: true,
           createdAt: true,
           updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
         },
       }),
       prisma.submission.count({ where }),
@@ -222,6 +227,11 @@ class SubmissionService {
           status: true,
           createdAt: true,
           updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
         },
       }),
       prisma.submission.count({ where }),
@@ -320,6 +330,11 @@ class SubmissionService {
           status: true,
           createdAt: true,
           updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
         },
       }),
       prisma.submission.count({ where }),

@@ -252,6 +252,7 @@ export const formatSubmissionApprovalResponse = (approval) => ({
 export const formatSubmissionByUserResponse = (submission) => ({
   id: submission.id.toString(),
   user_id: submission.userId.toString(),
+  name: submission.user?.nama || null,
   lingkungan_id: submission.lingkunganId.toString(),
   type: submission.type,
   status: submission.status,
@@ -280,6 +281,7 @@ export const formatSubmissionResponse = (submission, options = {}) => {
   return {
     id: submission.id.toString(),
     user_id: submission.userId.toString(),
+    name: submission.user?.nama || null,
     lingkungan_id: submission.lingkunganId.toString(),
     type: submission.type,
     status: submission.status,
