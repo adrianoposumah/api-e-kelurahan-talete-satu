@@ -16,4 +16,7 @@ router.post('/refresh', authController.refresh.bind(authController));
 // POST /auth/logout - Logout and revoke refresh token (protected)
 router.post('/logout', authMiddleware, authController.logout.bind(authController));
 
+// POST /auth/fcm-token - Save FCM token for push notifications (protected)
+router.post('/fcm-token', authMiddleware, authController.fcmToken.bind(authController));
+
 export default router;

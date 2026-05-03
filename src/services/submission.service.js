@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import letterService from './letter.service.js';
+import { sendToUser } from './notification.service.js';
 
 /**
  * Submission Service - Handles submission workflow business logic
@@ -68,10 +69,10 @@ class SubmissionService {
         payload: formData || null,
         ...(documentRows.length > 0
           ? {
-              documents: {
-                create: documentRows,
-              },
-            }
+            documents: {
+              create: documentRows,
+            },
+          }
           : {}),
       },
       include: {
@@ -90,6 +91,19 @@ class SubmissionService {
         },
       },
     });
+
+    try {
+      await sendToUser(activeKepling.userId, {
+        title: 'Pengajuan Surat Baru',
+        body: `Ada pengajuan ${letterType} baru dari ${user.nama} yang memerlukan persetujuan Anda.`,
+        data: {
+          submissionId: submission.id.toString(),
+          type: 'submission_created',
+        },
+      });
+    } catch (error) {
+      console.error('Failed to send notification to Kepling:', error);
+    }
 
     return submission;
   }

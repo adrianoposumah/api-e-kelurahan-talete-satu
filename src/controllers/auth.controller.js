@@ -155,6 +155,35 @@ class AuthController {
       next(error);
     }
   }
+
+  /**
+   * POST /auth/fcm-token - Save FCM token for push notifications
+   */
+  async fcmToken(req, res, next) {
+    try {
+      const { fcm_token } = req.body;
+      const userId = req.user.userId;
+
+      if (!fcm_token) {
+        return res.status(400).json({
+          error: 'Data tidak valid',
+          message: 'FCM token wajib diisi',
+        });
+      }
+
+      await authService.saveFcmToken(userId, fcm_token);
+
+      res.json({ message: 'FCM token berhasil disimpan' });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
 }
 
 export default new AuthController();

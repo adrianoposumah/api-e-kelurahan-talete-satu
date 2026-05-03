@@ -227,6 +227,32 @@ class AuthService {
 
     return true;
   }
+
+  /**
+   * Save FCM token for a user session
+   * @param {string} userId - User ID
+   * @param {string} fcmToken - FCM token from client
+   * @returns {Promise<boolean>}
+   */
+  async saveFcmToken(userId, fcmToken) {
+    const latestSession = await prisma.userToken.findFirst({
+      where: { userId: BigInt(userId) },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!latestSession) {
+      const error = new Error('Sesi pengguna tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    await prisma.userToken.update({
+      where: { id: latestSession.id },
+      data: { fcmToken }
+    });
+
+    return true;
+  }
 }
 
 export default new AuthService();
