@@ -233,6 +233,42 @@ class LetterController {
     }
   }
 
+  /**
+   * GET /letters/submission/:submission_id - Get letter details by submission ID
+   */
+  async getLetterBySubmissionId(req, res, next) {
+    try {
+      const { submission_id } = req.params;
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      const letter = await letterService.getLetterBySubmissionId(submission_id);
+
+      // Check access
+      const isOwner = letter.submission.userId.toString() === userId.toString();
+      const isAdmin = userRole === 'admin';
+      const isLurah = userRole === 'lurah';
+      const isSekertaris = userRole === 'sekertaris';
+
+      if (!isOwner && !isAdmin && !isLurah && !isSekertaris) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Anda tidak memiliki akses ke surat ini',
+        });
+      }
+
+      res.json(formatIssuedLetterResponse(letter));
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
   // ==================== LETTER REVOCATION (ADMIN) ====================
 
   /**

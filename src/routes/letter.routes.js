@@ -31,6 +31,9 @@ router.get('/download/:code', requireRole('warga', 'kepling', 'lurah', 'sekertar
 // GET /letters/:code - Get letter details by verification code
 router.get('/:code', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getLetterByCode.bind(letterController));
 
+// GET /letters/submission/:submission_id - Get letter details by submission ID
+router.get('/submission/:submission_id', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getLetterBySubmissionId.bind(letterController));
+
 // GET /letters/admin/all - Get all issued letters
 router.get('/admin/all', requireRole('admin', 'lurah', 'sekertaris'), letterController.getAllLetters.bind(letterController));
 

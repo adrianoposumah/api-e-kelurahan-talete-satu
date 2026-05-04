@@ -139,7 +139,7 @@ class LetterService {
     const { keyRecord, lurahName, lurahNip } = await this.getLurahInfo();
 
     // Build verification URL
-    const baseUrl = env.APP_URL || 'http://localhost:3000';
+    const baseUrl = env.APP_URL;
     const verificationUrl = `${baseUrl}/v1/letters/verify/${verificationCode}`;
 
     // Prepare template data
@@ -295,6 +295,33 @@ class LetterService {
     return letter;
   }
 
+  /**
+   * Get issued letter by submission ID
+   * @param {string|BigInt} submissionId - Submission ID
+   * @returns {Promise<object>} Issued letter
+   */
+  async getLetterBySubmissionId(submissionId) {
+    const letter = await prisma.issuedLetter.findUnique({
+      where: { submissionId: BigInt(submissionId) },
+      include: {
+        submission: {
+          include: {
+            user: { include: { kependudukan: true } },
+            lingkungan: true,
+          },
+        },
+      },
+    });
+
+    if (!letter) {
+      const error = new Error('Surat tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return letter;
+  }
+
   // ==================== VERIFICATION ====================
 
   /**
@@ -309,9 +336,9 @@ class LetterService {
     const keyRecord = letter.signatureKeyId
       ? await prisma.lurahKey.findUnique({ where: { id: letter.signatureKeyId } })
       : await prisma.lurahKey.findFirst({
-          where: { lurahProfileId: letter.signedBy },
-          orderBy: { createdAt: 'desc' },
-        });
+        where: { lurahProfileId: letter.signedBy },
+        orderBy: { createdAt: 'desc' },
+      });
 
     if (!keyRecord) {
       return {
