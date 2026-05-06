@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Surat Keterangan Usaha</title>
+    <style>
+      @page {
+        size: F4;
+        margin: 1cm 1.5cm;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 11pt;
+        line-height: 1.5;
+        color: #000;
+      }
+
+      .container {
+        max-width: 21cm;
+        margin: 0 auto;
+        padding: 0;
+      }
+
+      /* KOP SURAT */
+      .kop-surat {
+        display: flex;
+        align-items: center;
+        padding-bottom: 10px;
+        border-bottom: 3px solid #000;
+        margin-bottom: 14px;
+      }
+
+      .logo {
+        width: 120px;
+        height: 120px;
+        margin-right: 20px;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .kop-text {
+        text-align: center;
+        flex: 1;
+        line-height: 1.05;
+      }
+
+      .kop-line-1 {
+        font-size: 16pt;
+        font-weight: 500;
+      }
+
+      .kop-line-2 {
+        font-size: 18pt;
+        font-weight: bold;
+      }
+
+      .kop-line-3 {
+        font-size: 24pt;
+        font-weight: bold;
+      }
+
+      .kop-line-4 {
+        font-size: 14pt;
+        font-weight: normal;
+      }
+
+      .kop-line-5 {
+        font-size: 14pt;
+        font-weight: 600;
+        letter-spacing: 3px;
+      }
+
+      /* JUDUL SURAT */
+      .judul-surat {
+        text-align: center;
+        margin: 20px 0 10px 0;
+        line-height: 1;
+      }
+
+      .judul-surat h1 {
+        font-size: 14pt;
+        font-weight: 600;
+        text-decoration: underline;
+        margin-bottom: 5px;
+      }
+
+      .nomor-surat {
+        font-size: 12pt;
+        font-weight: normal;
+      }
+
+      /* KONTEN */
+      .content {
+        margin-top: 20px;
+        text-align: justify;
+      }
+
+      .paragraf {
+        text-indent: 40px;
+        margin-bottom: 10px;
+      }
+
+      .info-lurah {
+        margin: 12px 0 5px 40px;
+      }
+
+      /* TABEL INFO */
+      .info-pemohon {
+        margin: 12px 0 5px 40px;
+      }
+
+      .info-row {
+        display: flex;
+        margin-bottom: 5px;
+      }
+
+      .info-label {
+        width: 180px;
+        flex-shrink: 0;
+      }
+
+      .info-separator {
+        width: 20px;
+        text-align: center;
+      }
+
+      .info-value {
+        flex: 1;
+      }
+
+      .keterangan {
+        font-weight: bolder;
+        text-decoration: underline;
+      }
+
+      .keterangan-list {
+        margin: 5px 0 5px 50px;
+      }
+
+      .keterangan-list p {
+        margin-bottom: 8px;
+        text-align: justify;
+        padding-left: 10px;
+        text-indent: -10px;
+      }
+
+      .list-number {
+        display: inline-block;
+        width: 10px;
+      }
+
+      /* TANDA TANGAN */
+      .signature-section {
+        margin-top: 20px;
+        display: flex;
+        justify-content: flex-end;
+        line-height: 1.05;
+      }
+
+      .signature-box {
+        text-align: center;
+        width: 250px;
+      }
+
+      .signature-date {
+        margin-bottom: 5px;
+      }
+
+      .signature-title {
+        margin-bottom: 5px;
+      }
+
+      .signature-role {
+        margin-bottom: 10px;
+      }
+
+      tujuan-text {
+        font-weight: bold;
+      }
+
+      .qr-code {
+        width: 100px;
+        height: 100px;
+        margin: 10px auto;
+      }
+
+      .qr-code img {
+        width: 100%;
+        height: 100%;
+      }
+
+      .signature-name {
+        font-weight: bold;
+        text-transform: uppercase;
+        text-decoration: underline;
+        margin-top: 10px;
+      }
+
+      .signature-nip {
+        font-size: 11pt;
+      }
+
+      /* FOOTER */
+      .footer {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 9pt;
+        color: #666;
+        border-top: 1px solid #ccc;
+        padding-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- KOP SURAT -->
+      <div class="kop-surat">
+        <div class="logo">
+          <img src="{{LOGO_URL}}" alt="Logo Kota Tomohon" />
+        </div>
+        <div class="kop-text">
+          <div class="kop-line-1">PEMERINTAH KOTA TOMOHON</div>
+          <div class="kop-line-2">KECAMATAN TOMOHON TENGAH</div>
+          <div class="kop-line-3">KELURAHAN TALETE SATU</div>
+          <div class="kop-line-4">Jl. Sineleyan No.118 A Talete Satu</div>
+          <div class="kop-line-5">TOMOHON 95441</div>
+        </div>
+      </div>
+
+      <!-- JUDUL SURAT -->
+      <div class="judul-surat">
+        <h1>SURAT KETERANGAN USAHA</h1>
+        <div class="nomor-surat">Nomor : {{NOMOR_SURAT}}</div>
+      </div>
+
+      <!-- KONTEN -->
+      <div class="content">
+        <p>Yang bertandatangan dibawah ini:</p>
+        <div class="info-lurah">
+          <div class="info-row">
+            <span class="info-label">Nama</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NAMA_LURAH}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">NIP</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NIP_LURAH}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Jabatan</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">Lurah Talete Satu</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Alamat</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">Jl. Sineleyan No.118 A, Kelurahan Talete Satu,Kecamatan Tomohon Tengah, Kota Tomohon</span>
+          </div>
+        </div>
+        <p>Memberikan Keterangan dengan benar bahwa:</p>
+        <div class="info-pemohon">
+          <div class="info-row">
+            <span class="info-label">Nama Lengkap</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{NAMA_LENGKAP}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Jenis Kelamin</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{JENIS_KELAMIN}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tempat, Tanggal Lahir</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{TEMPAT_LAHIR}}, {{TANGGAL_LAHIR}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Agama</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{AGAMA}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Pekerjaan</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{PEKERJAAN}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Kewarganegaraan</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{KEWARGANEGARAAN}}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Alamat</span>
+            <span class="info-separator">:</span>
+            <span class="info-value">{{ALAMAT}}</span>
+          </div>
+        </div>
+        <p class="keterangan">KETERANGAN:</p>
+        <div class="keterangan-list">
+          <p><span class="list-number">1.</span>Bahwa yang bersangkutan benar penduduk yang berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
+          <p><span class="list-number">2.</span>Bahwa yang bersangkutan benar memiliki usaha dengan nama "{{NAMA_USAHA}}".</p>
+        </div>
+
+        <p class="paragraf">Demikian Surat Keterangan Usaha ini telah dibuat dengan benar untuk dapat dipergunakan sebgaimana mestinya.</p>
+      </div>
+
+      <!-- TANDA TANGAN -->
+      <div class="signature-section">
+        <div class="signature-box">
+          <div class="signature-date">Tomohon, {{TANGGAL_PENERBITAN}}</div>
+          <div class="signature-title">Mengetahui,</div>
+          <div class="signature-role">LURAH TALETE SATU,</div>
+          <div class="qr-code">
+            <img src="{{QR_CODE_DATA}}" alt="QR Code Verifikasi" />
+          </div>
+          <div class="signature-name">{{NAMA_LURAH}}</div>
+          <div class="signature-nip">NIP. {{NIP_LURAH}}</div>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="footer">Dokumen ini telah ditandatangani secara elektronik dan diterbitkan melalui aplikasi e-Kelurahan Talete Satu.</div>
+    </div>
+  </body>
+</html>

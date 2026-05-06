@@ -1,0 +1,52 @@
+{
+  "type": "belum_menikah",
+  "label": "Surat Keterangan Belum Menikah",
+  "name": "Surat Keterangan Belum Menikah",
+  "description": "Surat keterangan belum menikah untuk keperluan administrasi",
+  "kop_type": "H.3",
+  "fields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true },
+    { "name": "nama_ayah", "required": true },
+    { "name": "umur_ayah", "required": true },
+    { "name": "pekerjaan_ayah", "required": true },
+    { "name": "alamat_ayah", "required": true },
+    { "name": "nama_ibu", "required": true },
+    { "name": "umur_ibu", "required": true },
+    { "name": "pekerjaan_ibu", "required": true },
+    { "name": "alamat_ibu", "required": true }
+  ],
+  "files": [
+    { "name": "ktp", "required": true, "maxCount": 1 },
+    { "name": "kartu_keluarga", "required": true, "maxCount": 1 },
+    { "name": "surat_lainnya", "required": false, "maxCount": 1 }
+  ],
+  "requiredFields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true },
+    { "name": "nama_ayah", "required": true },
+    { "name": "umur_ayah", "required": true },
+    { "name": "pekerjaan_ayah", "required": true },
+    { "name": "alamat_ayah", "required": true },
+    { "name": "nama_ibu", "required": true },
+    { "name": "umur_ibu", "required": true },
+    { "name": "pekerjaan_ibu", "required": true },
+    { "name": "alamat_ibu", "required": true }
+  ]
+}

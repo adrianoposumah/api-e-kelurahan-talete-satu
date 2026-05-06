@@ -1,0 +1,36 @@
+{
+  "type": "tidak_mampu",
+  "label": "Surat Keterangan Kurang Mampu",
+  "name": "Surat Keterangan Kurang Mampu",
+  "description": "Surat keterangan kurang mampu untuk keperluan administrasi",
+  "kop_type": "H.6",
+  "fields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ],
+  "files": [
+    { "name": "ktp", "required": true, "maxCount": 1 },
+    { "name": "kartu_keluarga", "required": true, "maxCount": 1 },
+    { "name": "surat_lainnya", "required": false, "maxCount": 1 }
+  ],
+  "requiredFields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ]
+}

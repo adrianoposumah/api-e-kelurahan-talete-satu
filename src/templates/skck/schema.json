@@ -1,0 +1,38 @@
+{
+  "type": "skck",
+  "label": "Surat Permohonan SKCK",
+  "name": "Surat Permohonan SKCK",
+  "description": "Surat permohonan SKCK untuk keperluan administrasi",
+  "kop_type": "H.1",
+  "fields": [
+    { "name": "nik", "required": true },
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "pendidikan_terakhir", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ],
+  "files": [
+    { "name": "ktp", "required": true, "maxCount": 1 },
+    { "name": "kartu_keluarga", "required": true, "maxCount": 1 },
+    { "name": "surat_lainnya", "required": false, "maxCount": 1 }
+  ],
+  "requiredFields": [
+    { "name": "nik", "required": true },
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "pendidikan_terakhir", "required": true },
+    { "name": "status_perkawinan", "required": true },
+    { "name": "kewarganegaraan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ]
+}

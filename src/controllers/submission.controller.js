@@ -421,12 +421,13 @@ class SubmissionController {
    */
   async getSubmissionsForLurah(req, res, next) {
     try {
-      const { page, limit, status } = req.query;
+      const { page, limit, diproses, selesai } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsForLurah({
         page,
         limit,
-        status,
+        diproses,
+        selesai,
       });
 
       res.json({

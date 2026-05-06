@@ -6,6 +6,30 @@ import { sendToUser } from './notification.service.js';
  * Submission Service - Handles submission workflow business logic
  */
 class SubmissionService {
+  async getActiveLurahUserId() {
+    try {
+      const activeLurah = await prisma.lurahProfile.findFirst({
+        where: { isActive: true },
+        select: { userId: true },
+      });
+
+      return activeLurah?.userId ?? null;
+    } catch (error) {
+      console.error('Failed to get active Lurah for notification:', error);
+      return null;
+    }
+  }
+
+  async sendSubmissionNotification(userId, payload, logContext) {
+    if (!userId) return;
+
+    try {
+      await sendToUser(userId, payload);
+    } catch (error) {
+      console.error(`Failed to send notification ${logContext}:`, error);
+    }
+  }
+
   /**
    * Create a new submission
    * @param {object} data - Submission data
@@ -69,10 +93,10 @@ class SubmissionService {
         payload: formData || null,
         ...(documentRows.length > 0
           ? {
-            documents: {
-              create: documentRows,
-            },
-          }
+              documents: {
+                create: documentRows,
+              },
+            }
           : {}),
       },
       include: {
@@ -323,11 +347,35 @@ class SubmissionService {
    * @param {object} options - Query options
    * @returns {Promise<object>} Submissions and pagination
    */
-  async getSubmissionsForLurah({ page = 1, limit = 10, status, type }) {
+  async getSubmissionsForLurah({ page = 1, limit = 50, type, diproses, selesai }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const isEnabled = (value) => value !== undefined && value !== false && value !== 'false' && value !== '0';
+    const showDiproses = isEnabled(diproses);
+    const showSelesai = isEnabled(selesai);
+    const statusFilter = [];
 
-    const where = {};
-    if (status) where.status = status;
+    if (showDiproses || (!showDiproses && !showSelesai)) {
+      statusFilter.push({ status: 'pending_lurah' });
+    }
+
+    if (showSelesai || (!showDiproses && !showSelesai)) {
+      statusFilter.push(
+        { status: 'approved' },
+        {
+          status: 'rejected',
+          approvals: {
+            some: {
+              stage: 'lurah',
+              status: 'rejected',
+            },
+          },
+        },
+      );
+    }
+
+    const where = {
+      OR: statusFilter,
+    };
     if (type) where.type = type;
 
     const [submissions, total] = await Promise.all([
@@ -335,7 +383,7 @@ class SubmissionService {
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
           userId: true,
@@ -516,6 +564,40 @@ class SubmissionService {
       return updatedSubmission;
     });
 
+    const activeLurahUserId = await this.getActiveLurahUserId();
+    const notificationData = {
+      submissionId: result.id.toString(),
+      letterType: result.type,
+      status: result.status,
+    };
+
+    await Promise.all([
+      this.sendSubmissionNotification(
+        activeLurahUserId,
+        {
+          title: 'Pengajuan Menunggu Persetujuan Lurah',
+          body: `Pengajuan ${result.type} dari ${result.user.nama} telah disetujui Kepling dan menunggu persetujuan Anda.`,
+          data: {
+            ...notificationData,
+            type: 'submission_approved_by_kepling_for_lurah',
+          },
+        },
+        'to Lurah after Kepling approval',
+      ),
+      this.sendSubmissionNotification(
+        result.userId,
+        {
+          title: 'Pengajuan Disetujui Kepling',
+          body: `Pengajuan ${result.type} Anda telah disetujui Kepling dan diteruskan ke Lurah.`,
+          data: {
+            ...notificationData,
+            type: 'submission_approved_by_kepling_for_warga',
+          },
+        },
+        'to Warga after Kepling approval',
+      ),
+    ]);
+
     return result;
   }
 
@@ -604,6 +686,21 @@ class SubmissionService {
 
       return updatedSubmission;
     });
+
+    await this.sendSubmissionNotification(
+      result.userId,
+      {
+        title: 'Pengajuan Ditolak Kepling',
+        body: `Pengajuan ${result.type} Anda ditolak oleh Kepling. Alasan: ${reason}`,
+        data: {
+          submissionId: result.id.toString(),
+          letterType: result.type,
+          status: result.status,
+          type: 'submission_rejected_by_kepling',
+        },
+      },
+      'to Warga after Kepling rejection',
+    );
 
     return result;
   }

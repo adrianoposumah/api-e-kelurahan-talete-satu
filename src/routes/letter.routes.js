@@ -25,8 +25,7 @@ router.use(authMiddleware);
 // GET /letters - Get user's issued letters
 router.get('/', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getMyLetters.bind(letterController));
 
-// GET /letters/download/:code - Download letter PDF
-router.get('/download/:code', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.downloadLetter.bind(letterController));
+
 
 // GET /letters/:code - Get letter details by verification code
 router.get('/:code', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), letterController.getLetterByCode.bind(letterController));

@@ -1,0 +1,31 @@
+{
+  "type": "keterangan_hilang",
+  "label": "Surat Keterangan Hilang",
+  "name": "Surat Keterangan Hilang",
+  "description": "Surat keterangan hilang untuk keperluan administrasi",
+  "kop_type": "H.6",
+  "fields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ],
+  "files": [
+    { "name": "kartu_keluarga", "required": true, "maxCount": 1 },
+    { "name": "surat_lainnya", "required": false, "maxCount": 1 }
+  ],
+  "requiredFields": [
+    { "name": "nama_lengkap", "required": true },
+    { "name": "jenis_kelamin", "required": true },
+    { "name": "tempat_lahir", "required": true },
+    { "name": "tanggal_lahir", "required": true },
+    { "name": "agama", "required": true },
+    { "name": "pekerjaan", "required": true },
+    { "name": "alamat", "required": true },
+    { "name": "tujuan", "required": true }
+  ]
+}

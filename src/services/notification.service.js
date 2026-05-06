@@ -3,7 +3,7 @@ import prisma from '../config/prisma.js';
 
 export async function sendToUser(userId, { title, body, data = {} }) {
   if (!admin.apps.length) return null; // Firebase not initialized
-  
+
   const userTokens = await prisma.userToken.findMany({
     where: { userId: BigInt(userId), fcmToken: { not: null } },
     select: { id: true, fcmToken: true },
@@ -11,8 +11,9 @@ export async function sendToUser(userId, { title, body, data = {} }) {
 
   if (!userTokens.length) return null;
 
-  const tokens = userTokens.map(ut => ut.fcmToken);
-  
+  const tokens = userTokens.map((ut) => ut.fcmToken);
+
+  // eslint-disable-next-line no-useless-catch
   try {
     const result = await admin.messaging().sendEachForMulticast({
       tokens,
@@ -20,7 +21,7 @@ export async function sendToUser(userId, { title, body, data = {} }) {
       data,
       android: { priority: 'high' },
     });
-    
+
     // Cleanup invalid tokens
     if (result.failureCount > 0) {
       const failedTokens = [];
@@ -29,15 +30,15 @@ export async function sendToUser(userId, { title, body, data = {} }) {
           failedTokens.push(tokens[idx]);
         }
       });
-      
+
       if (failedTokens.length > 0) {
         await prisma.userToken.updateMany({
           where: { fcmToken: { in: failedTokens } },
-          data: { fcmToken: null }
+          data: { fcmToken: null },
         });
       }
     }
-    
+
     return result;
   } catch (err) {
     throw err;
@@ -48,7 +49,7 @@ export async function sendToMultiple(userIds, payload) {
   if (!admin.apps.length) return null; // Firebase not initialized
 
   const userTokens = await prisma.userToken.findMany({
-    where: { userId: { in: userIds.map(id => BigInt(id)) }, fcmToken: { not: null } },
+    where: { userId: { in: userIds.map((id) => BigInt(id)) }, fcmToken: { not: null } },
     select: { fcmToken: true },
   });
 

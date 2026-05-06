@@ -1,6 +1,5 @@
 import letterService from '../services/letter.service.js';
 import templateService from '../services/template.service.js';
-import { createReadStream, existsSync } from 'fs';
 import { formatIssuedLetterResponse } from '../utils/formatters.js';
 
 /**
@@ -151,48 +150,6 @@ class LetterController {
         pagination,
       });
     } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * GET /letters/download/:code - Download letter PDF
-   */
-  async downloadLetter(req, res, next) {
-    try {
-      const { code } = req.params;
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      const pdfPath = await letterService.getLetterPdfPath(code, userId, userRole);
-
-      if (!existsSync(pdfPath)) {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: 'File PDF tidak ditemukan',
-        });
-      }
-
-      // Set headers for PDF download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="surat_${code}.pdf"`);
-
-      // Stream the file
-      const stream = createReadStream(pdfPath);
-      stream.pipe(res);
-    } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: error.message,
-        });
-      }
-      if (error.code === 'FORBIDDEN') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: error.message,
-        });
-      }
       next(error);
     }
   }

@@ -507,23 +507,7 @@ class LetterService {
     });
   }
 
-  /**
-   * Get PDF file path for a letter (with access control)
-   */
-  async getLetterPdfPath(verificationCode, userId, userRole) {
-    const letter = await this.getLetterByVerificationCode(verificationCode);
 
-    const isOwner = letter.submission.userId.toString() === userId.toString();
-    const isPrivileged = ['admin', 'lurah', 'sekertaris'].includes(userRole);
-
-    if (!isOwner && !isPrivileged) {
-      const error = new Error('Anda tidak memiliki akses ke surat ini');
-      error.code = 'FORBIDDEN';
-      throw error;
-    }
-
-    return letter.pdfPath;
-  }
 }
 
 export default new LetterService();
