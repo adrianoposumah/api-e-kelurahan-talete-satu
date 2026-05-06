@@ -137,13 +137,25 @@ class SubmissionService {
    * @param {object} options - Query options
    * @returns {Promise<object>} Submissions and pagination
    */
-  async getSubmissionsByUser({ userId, page = 1, limit = 50, status, type }) {
+  async getSubmissionsByUser({ userId, page = 1, limit = 50, type, diproses, selesai }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const isEnabled = (value) => value !== undefined && value !== false && value !== 'false' && value !== '0';
+    const showDiproses = isEnabled(diproses);
+    const showSelesai = isEnabled(selesai);
+    const statusFilter = [];
+
+    if (showDiproses || (!showDiproses && !showSelesai)) {
+      statusFilter.push({ status: { in: ['pending_kepling', 'pending_lurah'] } });
+    }
+
+    if (showSelesai || (!showDiproses && !showSelesai)) {
+      statusFilter.push({ status: { in: ['rejected', 'approved'] } });
+    }
 
     const where = {
       userId: BigInt(userId),
+      OR: statusFilter,
     };
-    if (status) where.status = status;
     if (type) where.type = type;
 
     const [submissions, total] = await Promise.all([
@@ -151,7 +163,7 @@ class SubmissionService {
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
           userId: true,
@@ -226,8 +238,32 @@ class SubmissionService {
    * @param {object} options - Query options
    * @returns {Promise<object>} Submissions and pagination
    */
-  async getSubmissionsForKepling({ keplingUserId, page = 1, limit = 10, status, type }) {
+  async getSubmissionsForKepling({ keplingUserId, page = 1, limit = 10, type, diproses, selesai }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const isEnabled = (value) => value !== undefined && value !== false && value !== 'false' && value !== '0';
+    const showDiproses = isEnabled(diproses);
+    const showSelesai = isEnabled(selesai);
+    const statusFilter = [];
+
+    if (showDiproses || (!showDiproses && !showSelesai)) {
+      statusFilter.push({ status: 'pending_kepling' });
+    }
+
+    if (showSelesai || (!showDiproses && !showSelesai)) {
+      statusFilter.push(
+        { status: 'pending_lurah' },
+        { status: { in: ['approved', 'issued'] } },
+        {
+          status: 'rejected',
+          approvals: {
+            some: {
+              stage: { in: ['kepling', 'lurah'] },
+              status: 'rejected',
+            },
+          },
+        },
+      );
+    }
 
     // Get kepling's active lingkungan assignments
     const keplingAssignments = await prisma.lingkunganKepling.findMany({
@@ -247,8 +283,8 @@ class SubmissionService {
 
     const where = {
       lingkunganId: { in: lingkunganIds },
+      OR: statusFilter,
     };
-    if (status) where.status = status;
     if (type) where.type = type;
 
     const [submissions, total] = await Promise.all([
@@ -256,7 +292,7 @@ class SubmissionService {
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
           userId: true,

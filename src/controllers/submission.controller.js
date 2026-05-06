@@ -154,13 +154,14 @@ class SubmissionController {
   async getMySubmissions(req, res, next) {
     try {
       const userId = req.user.userId;
-      const { page, limit, status } = req.query;
+      const { page, limit, diproses, selesai } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsByUser({
         userId,
         page,
         limit,
-        status,
+        diproses,
+        selesai,
       });
 
       res.json({
@@ -274,13 +275,14 @@ class SubmissionController {
   async getSubmissionsForKepling(req, res, next) {
     try {
       const keplingUserId = req.user.userId;
-      const { page, limit, status } = req.query;
+      const { page, limit, diproses, selesai } = req.query;
 
       const { submissions, pagination } = await submissionService.getSubmissionsForKepling({
         keplingUserId,
         page,
         limit,
-        status,
+        diproses,
+        selesai,
       });
 
       res.json({
