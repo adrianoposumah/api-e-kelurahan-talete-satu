@@ -788,6 +788,23 @@ class SubmissionService {
       },
     });
 
+    await this.sendSubmissionNotification(
+      updatedSubmission.userId,
+      {
+        title: 'Pengajuan Disetujui Lurah',
+        body: `Pengajuan ${updatedSubmission.type} Anda telah disetujui Lurah dan surat telah diterbitkan.`,
+        data: {
+          submissionId: updatedSubmission.id.toString(),
+          letterType: updatedSubmission.type,
+          status: updatedSubmission.status,
+          letterNumber: result.letterNumber,
+          verificationCode: result.verificationCode,
+          type: 'submission_approved_by_lurah',
+        },
+      },
+      'to Warga after Lurah approval',
+    );
+
     return {
       submission: updatedSubmission,
       letterResult: result,
@@ -864,6 +881,21 @@ class SubmissionService {
 
       return updatedSubmission;
     });
+
+    await this.sendSubmissionNotification(
+      result.userId,
+      {
+        title: 'Pengajuan Ditolak Lurah',
+        body: `Pengajuan ${result.type} Anda ditolak oleh Lurah. Alasan: ${reason}`,
+        data: {
+          submissionId: result.id.toString(),
+          letterType: result.type,
+          status: result.status,
+          type: 'submission_rejected_by_lurah',
+        },
+      },
+      'to Warga after Lurah rejection',
+    );
 
     return result;
   }
