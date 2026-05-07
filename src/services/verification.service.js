@@ -1,6 +1,15 @@
 import prisma from '../config/prisma.js';
 import cryptoService from './crypto.service.js';
 import pdfService from './pdf.service.js';
+import { readFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import { basename, dirname, isAbsolute, relative, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = resolve(__dirname, '..', '..');
+const PUBLIC_LETTERS_DIR = resolve(PROJECT_ROOT, 'public', 'letters');
 
 /**
  * Verification Service - Hybrid verification for uploaded letter PDF files.
@@ -10,6 +19,61 @@ import pdfService from './pdf.service.js';
  * 2) Cryptographic check against stored public key.
  */
 class VerificationService {
+  /**
+   * Ensure a PDF path from the database resolves only to the public letters folder.
+   * @param {string} filePath - Stored PDF path
+   * @returns {{ absolutePath: string, publicPath: string }}
+   */
+  resolvePublicLetterPath(filePath) {
+    const storedPath = String(filePath || '');
+    const isDriveAbsolutePath = /^[a-zA-Z]:[\\/]/.test(storedPath) || storedPath.startsWith('\\\\');
+    const absolutePath = isDriveAbsolutePath ? resolve(storedPath) : resolve(PROJECT_ROOT, storedPath.replace(/^[/\\]+/, ''));
+    const relativeToLettersDir = relative(PUBLIC_LETTERS_DIR, absolutePath);
+    const isInsideLettersDir = relativeToLettersDir === '' || (!relativeToLettersDir.startsWith('..') && !isAbsolute(relativeToLettersDir));
+
+    if (!isInsideLettersDir) {
+      const error = new Error('Stored PDF path is outside public letters directory');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    return {
+      absolutePath,
+      publicPath: `/${relative(PROJECT_ROOT, absolutePath).replace(/\\/g, '/')}`,
+    };
+  }
+
+  /**
+   * Read the generated PDF stored for an issued letter.
+   * @param {object} issuedLetter - Issued letter DB record
+   * @returns {Promise<{ buffer: Buffer, publicPath: string, filename: string }>}
+   */
+  async readStoredPdf(issuedLetter) {
+    const candidatePaths = [issuedLetter.pdfPath, pdfService.getPdfPath(issuedLetter.verificationCode)].filter(Boolean);
+    const seen = new Set();
+
+    for (const candidatePath of candidatePaths) {
+      const pdfPath = this.resolvePublicLetterPath(candidatePath);
+
+      if (seen.has(pdfPath.absolutePath)) {
+        continue;
+      }
+      seen.add(pdfPath.absolutePath);
+
+      if (existsSync(pdfPath.absolutePath)) {
+        return {
+          buffer: await readFile(pdfPath.absolutePath),
+          publicPath: pdfPath.publicPath,
+          filename: basename(pdfPath.absolutePath),
+        };
+      }
+    }
+
+    const error = new Error('Stored PDF file was not found on server');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
   /**
    * Extract and validate required signature metadata from a PDF.
    * @param {Buffer} pdfBuffer - Uploaded PDF buffer
@@ -245,6 +309,50 @@ class VerificationService {
             formData: serverResult.issuedLetter.submission.payload || {},
           }
         : null,
+    };
+  }
+
+  /**
+   * Verify a generated PDF by verification code.
+   * The server loads the stored PDF and runs the same hybrid verification pipeline.
+   * @param {string} verificationCode - Public verification code
+   * @returns {Promise<object>} Hybrid verification result payload with PDF preview data
+   */
+  async verifyLetterByCode(verificationCode) {
+    const normalizedCode = String(verificationCode || '').trim();
+
+    if (!normalizedCode) {
+      const error = new Error('Verification code is required');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const issuedLetter = await prisma.issuedLetter.findUnique({
+      where: { verificationCode: normalizedCode },
+      select: {
+        verificationCode: true,
+        pdfPath: true,
+      },
+    });
+
+    if (!issuedLetter) {
+      const error = new Error('Letter code not found in records');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const storedPdf = await this.readStoredPdf(issuedLetter);
+    const verificationResult = await this.verifyLetter(storedPdf.buffer);
+
+    return {
+      ...verificationResult,
+      pdf: {
+        filename: storedPdf.filename,
+        path: storedPdf.publicPath,
+        mimeType: 'application/pdf',
+        size: storedPdf.buffer.length,
+        dataUrl: `data:application/pdf;base64,${storedPdf.buffer.toString('base64')}`,
+      },
     };
   }
 }

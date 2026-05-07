@@ -38,6 +38,10 @@ const uploadPdf = (req, res, next) => {
   });
 };
 
+// Public endpoint: verify stored server PDF by verification code
+router.post('/code', verificationController.verifyByCode.bind(verificationController));
+router.get('/code/:verificationCode', verificationController.verifyByCode.bind(verificationController));
+
 // Public endpoint: POST /verify
 router.post('/', uploadPdf, verificationController.verify.bind(verificationController));
 

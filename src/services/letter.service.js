@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 import prisma from '../config/prisma.js';
 import templateService from './template.service.js';
 import cryptoService from './crypto.service.js';
@@ -13,14 +13,24 @@ import env from '../config/env.js';
  */
 class LetterService {
   /**
-   * Generate letter number using atomic LetterCounter.
-   * Format: {sequence}/2009/D.15/{roman_month}/{year}
-   * @param {string} type - Letter type
-   * @returns {Promise<string>} Letter number
+   * Generate an 8-character random verification prefix.
+   * @returns {string} Uppercase random code
    */
-  async generateLetterNumber(type) {
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
+  generateVerificationPrefix() {
+    return randomBytes(4).toString('hex').toUpperCase();
+  }
+
+  /**
+   * Generate letter identity using atomic LetterCounter.
+   * Verification code format: {random_8_chars}-{sequence}
+   * Letter number format: {verificationCode}/2009/D.15/{roman_month}/{year}
+   * @param {string} type - Letter type
+   * @returns {Promise<{ verificationCode: string, letterNumber: string }>} Letter identity
+   */
+  async generateLetterIdentity(type) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
 
     // Atomic increment via SQL upsert — avoids stale Prisma client model access issues.
     const rows = await prisma.$queryRaw`
@@ -32,8 +42,22 @@ class LetterService {
     `;
 
     const sequence = Number(rows?.[0]?.sequence || 1);
-    const seq = String(sequence).padStart(4, '0');
-    return `${seq}/2009/D.15/${this.getRomanMonth(month)}/${year}`;
+    const seq = String(sequence).padStart(3, '0');
+    const verificationCode = `${this.generateVerificationPrefix()}-${seq}`;
+    const letterNumber = `${verificationCode}/2009/D.15/${this.getRomanMonth(month)}/${year}`;
+
+    return { verificationCode, letterNumber };
+  }
+
+  /**
+   * Generate letter number using atomic LetterCounter.
+   * Format: {random_8_chars}-{sequence}/2009/D.15/{roman_month}/{year}
+   * @param {string} type - Letter type
+   * @returns {Promise<string>} Letter number
+   */
+  async generateLetterNumber(type) {
+    const { letterNumber } = await this.generateLetterIdentity(type);
+    return letterNumber;
   }
 
   /**
@@ -127,20 +151,17 @@ class LetterService {
     }
 
     // ==================== PHASE 1: Generate letter number ====================
-    const letterNumber = await this.generateLetterNumber(submission.type);
+    const { verificationCode, letterNumber } = await this.generateLetterIdentity(submission.type);
 
     // Get template schema
     const schema = await templateService.getSchema(submission.type);
-
-    // Generate verification code (16 char hex)
-    const verificationCode = uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase();
 
     // Get Lurah info and active key
     const { keyRecord, lurahName, lurahNip } = await this.getLurahInfo();
 
     // Build verification URL
-    const baseUrl = env.APP_URL;
-    const verificationUrl = `${baseUrl}/v1/letters/verify/${verificationCode}`;
+    const baseUrl = (env.VERIFICATION_URL || '').replace(/\/+$/, '');
+    const verificationUrl = `${baseUrl}/letters?code=${verificationCode}`;
 
     // Prepare template data
     const templateData = templateService.prepareTemplateData(submission, {
@@ -336,9 +357,9 @@ class LetterService {
     const keyRecord = letter.signatureKeyId
       ? await prisma.lurahKey.findUnique({ where: { id: letter.signatureKeyId } })
       : await prisma.lurahKey.findFirst({
-        where: { lurahProfileId: letter.signedBy },
-        orderBy: { createdAt: 'desc' },
-      });
+          where: { lurahProfileId: letter.signedBy },
+          orderBy: { createdAt: 'desc' },
+        });
 
     if (!keyRecord) {
       return {
@@ -506,8 +527,6 @@ class LetterService {
       },
     });
   }
-
-
 }
 
 export default new LetterService();

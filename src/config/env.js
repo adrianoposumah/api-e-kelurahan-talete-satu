@@ -6,6 +6,7 @@ const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN,
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN,
+  VERIFICATION_URL: process.env.VERIFICATION_URL,
 };
 
 export default env;
