@@ -137,12 +137,14 @@ class LetterController {
    */
   async getAllLetters(req, res, next) {
     try {
-      const { page, limit, type } = req.query;
+      const { page, limit, type, lingkungan, lingkungan_id, search, letter_number } = req.query;
 
       const { letters, pagination } = await letterService.getAllLetters({
         page,
         limit,
         type,
+        lingkungan: lingkungan || lingkungan_id,
+        search: search || letter_number,
       });
 
       res.json({
@@ -150,6 +152,12 @@ class LetterController {
         pagination,
       });
     } catch (error) {
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
       next(error);
     }
   }

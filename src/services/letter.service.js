@@ -1,9 +1,20 @@
 import { randomBytes } from 'crypto';
+import { Prisma } from '@prisma/client';
 import prisma from '../config/prisma.js';
 import templateService from './template.service.js';
 import cryptoService from './crypto.service.js';
 import pdfService from './pdf.service.js';
 import env from '../config/env.js';
+
+const parseBigIntFilter = (value, fieldName) => {
+  try {
+    return BigInt(value);
+  } catch {
+    const error = new Error(`${fieldName} harus berupa angka yang valid`);
+    error.code = 'BAD_REQUEST';
+    throw error;
+  }
+};
 
 /**
  * Letter Service - Letter number, QR, PDF generation, signing
@@ -462,36 +473,71 @@ class LetterService {
   /**
    * Get all issued letters (admin/lurah)
    */
-  async getAllLetters({ page = 1, limit = 10, type }) {
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+  async getAllLetters({ page = 1, limit = 10, type, lingkungan, search }) {
+    const parsedPage = parseInt(page);
+    const parsedLimit = parseInt(limit);
+    const skip = (parsedPage - 1) * parsedLimit;
     const where = {};
-    if (type) where.type = type;
+    const rawWhere = [];
 
-    const [letters, total] = await Promise.all([
-      prisma.issuedLetter.findMany({
-        where,
-        skip,
-        take: parseInt(limit),
-        orderBy: { issuedAt: 'desc' },
-        include: {
-          submission: {
-            include: {
-              user: { include: { kependudukan: true } },
-              lingkungan: true,
-            },
-          },
-        },
-      }),
+    if (type) where.type = type;
+    if (type) rawWhere.push(Prisma.sql`il.type::text = ${type}`);
+    if (lingkungan) {
+      const lingkunganId = parseBigIntFilter(lingkungan, 'lingkungan');
+      where.submission = { lingkunganId };
+      rawWhere.push(Prisma.sql`s.lingkungan_id = ${lingkunganId}`);
+    }
+    if (search) {
+      where.letterNumber = {
+        contains: search,
+        mode: 'insensitive',
+      };
+      rawWhere.push(Prisma.sql`il.letter_number ILIKE ${`%${search}%`}`);
+    }
+
+    const whereSql = rawWhere.length ? Prisma.sql`WHERE ${Prisma.join(rawWhere, ' AND ')}` : Prisma.empty;
+
+    const [orderedRows, total] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT il.id
+        FROM issued_letters il
+        JOIN submissions s ON s.id = il.submission_id
+        ${whereSql}
+        ORDER BY
+          substring(il.letter_number FROM '-([0-9]{3})/')::int ASC NULLS LAST,
+          il.issued_at ASC,
+          il.id ASC
+        LIMIT ${parsedLimit}
+        OFFSET ${skip}
+      `,
       prisma.issuedLetter.count({ where }),
     ]);
+
+    const orderedIds = orderedRows.map((row) => row.id);
+    const orderIndex = new Map(orderedIds.map((id, index) => [id.toString(), index]));
+    const letters = orderedIds.length
+      ? await prisma.issuedLetter.findMany({
+          where: { id: { in: orderedIds } },
+          include: {
+            submission: {
+              include: {
+                user: { include: { kependudukan: true } },
+                lingkungan: true,
+              },
+            },
+          },
+        })
+      : [];
+
+    letters.sort((a, b) => orderIndex.get(a.id.toString()) - orderIndex.get(b.id.toString()));
 
     return {
       letters,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: parsedPage,
+        limit: parsedLimit,
         total,
-        total_pages: Math.ceil(total / parseInt(limit)),
+        total_pages: Math.ceil(total / parsedLimit),
       },
     };
   }

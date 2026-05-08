@@ -113,6 +113,7 @@ class VerificationService {
     if (!issuedLetter) {
       return {
         pass: false,
+        status: 'not_found',
         reason: 'Letter code not found in records',
         issuedLetter: null,
       };
@@ -121,6 +122,7 @@ class VerificationService {
     if (!['approved', 'issued'].includes(issuedLetter.submission.status)) {
       return {
         pass: false,
+        status: 'not_approved',
         reason: 'Letter was not approved through the system',
         issuedLetter,
       };
@@ -129,6 +131,7 @@ class VerificationService {
     if (issuedLetter.isRevoked) {
       return {
         pass: false,
+        status: 'revoked',
         reason: `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`,
         issuedLetter,
       };
@@ -137,6 +140,7 @@ class VerificationService {
     if (metadata.signatureValue !== issuedLetter.signature) {
       return {
         pass: false,
+        status: 'mismatch',
         reason: 'Signature does not match records',
         issuedLetter,
       };
@@ -145,6 +149,7 @@ class VerificationService {
     if (metadata.canonicalHash && metadata.canonicalHash !== issuedLetter.canonicalHash) {
       return {
         pass: false,
+        status: 'mismatch',
         reason: 'Canonical hash does not match records',
         issuedLetter,
       };
@@ -158,6 +163,7 @@ class VerificationService {
       } catch {
         return {
           pass: false,
+          status: 'malformed_metadata',
           reason: 'Canonical payload in metadata is malformed',
           issuedLetter,
         };
@@ -166,6 +172,7 @@ class VerificationService {
       if (decodedCanonicalPayload !== issuedLetter.canonicalData) {
         return {
           pass: false,
+          status: 'mismatch',
           reason: 'Canonical payload does not match records',
           issuedLetter,
         };
@@ -175,6 +182,7 @@ class VerificationService {
     if (metadata.signatureKeyId && issuedLetter.signatureKeyId && metadata.signatureKeyId !== issuedLetter.signatureKeyId.toString()) {
       return {
         pass: false,
+        status: 'mismatch',
         reason: 'Signing key does not match records',
         issuedLetter,
       };
@@ -183,6 +191,7 @@ class VerificationService {
     if (metadata.letterNumber && metadata.letterNumber !== issuedLetter.letterNumber) {
       return {
         pass: false,
+        status: 'mismatch',
         reason: 'Letter number does not match records',
         issuedLetter,
       };
@@ -190,24 +199,50 @@ class VerificationService {
 
     return {
       pass: true,
+      status: 'pass',
       reason: 'Letter found in records with approved status',
       issuedLetter,
     };
   }
 
   /**
+   * Decode canonical payload embedded in PDF metadata.
+   * @param {object} metadata - Extracted metadata
+   * @returns {string|null} Canonical JSON string or null
+   */
+  decodeCanonicalPayload(metadata) {
+    if (!metadata.canonicalPayload) {
+      return null;
+    }
+
+    try {
+      return Buffer.from(metadata.canonicalPayload, 'base64').toString('utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Resolve key record used to verify a letter signature.
    * @param {object} metadata - Extracted metadata
-   * @param {object} issuedLetter - Issued letter DB record
+   * @param {object|null} issuedLetter - Issued letter DB record
    * @returns {Promise<object|null>} Key record or null
    */
   async resolveKey(metadata, issuedLetter) {
     if (metadata.signatureKeyId) {
-      return prisma.lurahKey.findUnique({ where: { id: BigInt(metadata.signatureKeyId) } });
+      try {
+        return await prisma.lurahKey.findUnique({ where: { id: BigInt(metadata.signatureKeyId) } });
+      } catch {
+        return null;
+      }
     }
 
-    if (issuedLetter.signatureKeyId) {
+    if (issuedLetter?.signatureKeyId) {
       return prisma.lurahKey.findUnique({ where: { id: issuedLetter.signatureKeyId } });
+    }
+
+    if (!issuedLetter) {
+      return null;
     }
 
     return prisma.lurahKey.findFirst({
@@ -223,10 +258,12 @@ class VerificationService {
    * @returns {Promise<object>} Crypto check result
    */
   async runCryptoCheck(metadata, issuedLetter) {
-    if (!issuedLetter) {
+    const canonicalData = issuedLetter?.canonicalData || this.decodeCanonicalPayload(metadata);
+
+    if (!canonicalData) {
       return {
         pass: false,
-        reason: 'Server check failed — crypto check skipped',
+        reason: 'Canonical payload is not available for cryptographic verification',
         keyStatus: null,
       };
     }
@@ -241,7 +278,7 @@ class VerificationService {
       };
     }
 
-    const isValid = cryptoService.verifyLetterSignature(issuedLetter.canonicalData, metadata.signatureValue, keyRecord.publicKey);
+    const isValid = cryptoService.verifyLetterSignature(canonicalData, metadata.signatureValue, keyRecord.publicKey);
 
     if (!isValid) {
       return {
@@ -261,6 +298,60 @@ class VerificationService {
   }
 
   /**
+   * Combine server and crypto checks into the public verification decision.
+   * @param {object} serverResult - Server-side check result
+   * @param {object} cryptoResult - Cryptographic check result
+   * @returns {{ valid: boolean, status: string, message: string }}
+   */
+  decideVerificationResult(serverResult, cryptoResult) {
+    if (serverResult.status === 'revoked' && cryptoResult.pass) {
+      return {
+        valid: false,
+        status: 'REVOKED',
+        message: 'Surat Revoked',
+      };
+    }
+
+    if (serverResult.status === 'not_found' && cryptoResult.pass) {
+      return {
+        valid: false,
+        status: 'FAKE',
+        message: 'Surat Palsu',
+      };
+    }
+
+    if (serverResult.pass && !cryptoResult.pass) {
+      return {
+        valid: false,
+        status: 'MODIFIED',
+        message: 'Surat dimodifikasi',
+      };
+    }
+
+    if (!serverResult.pass && !cryptoResult.pass) {
+      return {
+        valid: false,
+        status: 'FAKE_OR_NOT_FOUND',
+        message: 'Surat Palsu/Tidak ada',
+      };
+    }
+
+    if (serverResult.pass && cryptoResult.pass) {
+      return {
+        valid: true,
+        status: 'VALID',
+        message: 'Surat Valid',
+      };
+    }
+
+    return {
+      valid: false,
+      status: 'INVALID',
+      message: 'Surat tidak valid',
+    };
+  }
+
+  /**
    * Verify uploaded letter PDF with hybrid verification.
    * @param {Buffer} pdfBuffer - Uploaded PDF bytes
    * @returns {Promise<object>} Hybrid verification result payload
@@ -273,13 +364,16 @@ class VerificationService {
     } catch (error) {
       return {
         valid: false,
+        status: 'FAKE_OR_NOT_FOUND',
+        message: 'Surat Palsu/Tidak ada',
         serverCheck: {
           pass: false,
+          status: 'metadata_error',
           reason: error.message,
         },
         cryptoCheck: {
           pass: false,
-          reason: 'Server check failed — crypto check skipped',
+          reason: 'Canonical payload is not available for cryptographic verification',
           keyStatus: null,
         },
         letter: null,
@@ -287,13 +381,16 @@ class VerificationService {
     }
 
     const serverResult = await this.runServerCheck(metadata);
-    const cryptoResult = await this.runCryptoCheck(metadata, serverResult.pass ? serverResult.issuedLetter : null);
-    const valid = serverResult.pass && cryptoResult.pass;
+    const cryptoResult = await this.runCryptoCheck(metadata, serverResult.issuedLetter);
+    const decision = this.decideVerificationResult(serverResult, cryptoResult);
 
     return {
-      valid,
+      valid: decision.valid,
+      status: decision.status,
+      message: decision.message,
       serverCheck: {
         pass: serverResult.pass,
+        status: serverResult.status,
         reason: serverResult.reason,
       },
       cryptoCheck: {
@@ -301,7 +398,7 @@ class VerificationService {
         reason: cryptoResult.reason,
         keyStatus: cryptoResult.keyStatus,
       },
-      letter: valid
+      letter: decision.valid
         ? {
             letterNumber: serverResult.issuedLetter.letterNumber,
             letterType: serverResult.issuedLetter.type,
