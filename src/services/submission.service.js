@@ -2,6 +2,29 @@ import prisma from '../config/prisma.js';
 import letterService from './letter.service.js';
 import { sendToUser } from './notification.service.js';
 
+const parseBigIntFilter = (value, fieldName) => {
+  try {
+    return BigInt(value);
+  } catch {
+    const error = new Error(`${fieldName} harus berupa angka yang valid`);
+    error.code = 'BAD_REQUEST';
+    throw error;
+  }
+};
+
+const parseCreatedAtSort = (value) => {
+  if (!value) return 'asc';
+
+  const direction = String(value).toLowerCase();
+  if (direction === 'asc' || direction === 'desc') {
+    return direction;
+  }
+
+  const error = new Error('created_at harus bernilai asc atau desc');
+  error.code = 'BAD_REQUEST';
+  throw error;
+};
+
 /**
  * Submission Service - Handles submission workflow business logic
  */
@@ -455,6 +478,100 @@ class SubmissionService {
    * @returns {Promise<object>} Submission detail
    */
   async getSubmissionLurahDetailById({ submissionId }) {
+    const submission = await prisma.submission.findUnique({
+      where: { id: BigInt(submissionId) },
+      include: {
+        user: {
+          include: { kependudukan: true },
+        },
+        lingkungan: {
+          include: {
+            keplings: {
+              where: { selesai: null },
+              include: { user: true },
+            },
+          },
+        },
+        documents: true,
+        approvals: {
+          include: { approver: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!submission) {
+      const error = new Error('Submission tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return submission;
+  }
+
+  /**
+   * Get all submissions for admin monitoring
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submissions and pagination
+   */
+  async getSubmissionsForAdmin({ page = 1, limit = 10, type, status, lingkungan, createdAt, search }) {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const createdAtSort = parseCreatedAtSort(createdAt);
+
+    const where = {};
+    if (type) where.type = type;
+    if (status) where.status = status;
+    if (lingkungan) where.lingkunganId = parseBigIntFilter(lingkungan, 'lingkungan');
+    if (search) {
+      where.user = {
+        nama: {
+          contains: search,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    const [submissions, total] = await Promise.all([
+      prisma.submission.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: createdAtSort },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
+        },
+      }),
+      prisma.submission.count({ where }),
+    ]);
+
+    return {
+      submissions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        total_pages: Math.ceil(total / parseInt(limit)),
+      },
+    };
+  }
+
+  /**
+   * Get submission detail by ID for admin monitoring
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submission detail
+   */
+  async getSubmissionAdminDetailById({ submissionId }) {
     const submission = await prisma.submission.findUnique({
       where: { id: BigInt(submissionId) },
       include: {

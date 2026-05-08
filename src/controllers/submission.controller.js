@@ -464,6 +464,63 @@ class SubmissionController {
     }
   }
 
+  // ==================== ADMIN ACTIONS ====================
+
+  /**
+   * GET /submissions/admin/list - Get all submissions for admin monitoring
+   */
+  async getSubmissionsForAdmin(req, res, next) {
+    try {
+      const { page, limit, type, status, lingkungan, lingkungan_id, created_at, search, name } = req.query;
+
+      const { submissions, pagination } = await submissionService.getSubmissionsForAdmin({
+        page,
+        limit,
+        type,
+        status,
+        lingkungan: lingkungan || lingkungan_id,
+        createdAt: created_at,
+        search: search || name,
+      });
+
+      res.json({
+        data: submissions.map(formatSubmissionByUserResponse),
+        pagination,
+      });
+    } catch (error) {
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/admin/:id - Get submission detail by ID for admin monitoring
+   */
+  async getSubmissionAdminDetailById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const submission = await submissionService.getSubmissionAdminDetailById({
+        submissionId: id,
+      });
+
+      res.json(this.formatSubmissionDetail(submission, req));
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
   /**
    * POST /submissions/:id/lurah/approve - Approve by lurah (triggers letter generation)
    * Body: { passphrase, note?, keterangan? }

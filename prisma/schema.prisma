@@ -63,7 +63,7 @@ model User {
   lingkunganKepling LingkunganKepling[]
   submissions    Submission[]
   approvals      SubmissionApproval[]
-  lurahProfile   LurahProfile?
+  lurahProfiles  LurahProfile[]
   sekertarisProfile SekertarisProfile?
 
   @@map("users")
@@ -272,8 +272,8 @@ model SubmissionApproval {
 // Lurah profile - stores Lurah-specific information (NIP, etc.)
 model LurahProfile {
   id            BigInt    @id @default(autoincrement()) @db.BigInt
-  userId        BigInt    @unique @map("user_id") @db.BigInt
-  nip           String    @unique @db.VarChar(18) // NIP format: 18 digits
+  userId        BigInt    @map("user_id") @db.BigInt
+  nip           String    @db.VarChar(18) // NIP format: 18 digits
   namaLengkap   String    @map("nama_lengkap") @db.VarChar(100)
   jabatan       String    @default("Lurah") @db.VarChar(100)
   pangkat       String?   @db.VarChar(100) // Golongan/Pangkat
@@ -286,6 +286,9 @@ model LurahProfile {
   // Relations
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   lurahKeys     LurahKey[]
+
+  @@index([userId])
+  @@index([nip])
 
   @@map("lurah_profiles")
 }

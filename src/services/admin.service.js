@@ -1,6 +1,5 @@
 import prisma from '../config/prisma.js';
 
-
 /**
  * Admin Service - Handles admin-related business logic
  */
@@ -10,12 +9,15 @@ class AdminService {
    * @param {object} options - Query options
    * @returns {Promise<object>} Users and pagination info
    */
-  async getUsers({ page = 1, limit = 10, status, role }) {
+  async getUsers({ page = 1, limit = 10, status, role, search }) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {};
     if (status) where.status = status;
     if (role) where.role = role;
+    if (search) {
+      where.OR = [{ nama: { contains: search, mode: 'insensitive' } }, { nik: { contains: search, mode: 'insensitive' } }];
+    }
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -302,6 +304,9 @@ class AdminService {
         user: {
           include: { kependudukan: true },
         },
+        lurahKeys: {
+          select: { status: true },
+        },
       },
     });
 
@@ -344,12 +349,15 @@ class AdminService {
       throw error;
     }
 
-    // Check if NIP already exists
-    const existingNip = await prisma.lurahProfile.findUnique({
-      where: { nip },
+    // Check if NIP already exists for a different user
+    const existingNip = await prisma.lurahProfile.findFirst({
+      where: {
+        nip,
+        NOT: { userId: BigInt(userId) },
+      },
     });
 
-    if (existingNip && existingNip.userId !== BigInt(userId)) {
+    if (existingNip) {
       const error = new Error('NIP sudah digunakan oleh Lurah lain');
       error.code = 'CONFLICT';
       throw error;
@@ -402,7 +410,7 @@ class AdminService {
         data: { role: 'lurah' },
       });
 
-      // Create Lurah profile
+      // Create new Lurah profile (always create, don't update)
       const newLurahProfile = await tx.lurahProfile.create({
         data: {
           userId: BigInt(userId),
@@ -445,8 +453,11 @@ class AdminService {
 
     // Check if new NIP already exists (if changing)
     if (nip && nip !== currentLurahProfile.nip) {
-      const existingNip = await prisma.lurahProfile.findUnique({
-        where: { nip },
+      const existingNip = await prisma.lurahProfile.findFirst({
+        where: {
+          nip,
+          NOT: { userId: currentLurahProfile.userId },
+        },
       });
 
       if (existingNip) {

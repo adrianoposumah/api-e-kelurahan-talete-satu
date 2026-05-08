@@ -10,13 +10,14 @@ class AdminController {
    */
   async getUsers(req, res, next) {
     try {
-      const { page, limit, status, role } = req.query;
+      const { page, limit, status, role, search } = req.query;
 
       const { users, pagination } = await adminService.getUsers({
         page,
         limit,
         status,
         role,
+        search,
       });
 
       res.json({
@@ -232,9 +233,16 @@ class AdminController {
         });
       }
 
+      const hasActiveKey = lurahProfile.lurahKeys?.some((key) => key.status === 'ACTIVE');
+      const hasRevokedKey = lurahProfile.lurahKeys?.some((key) => key.status === 'REVOKED');
+      const keyStatus = hasActiveKey ? 'active' : hasRevokedKey ? 'revoked' : 'no-key';
+
       res.json({
         message: 'Data Lurah berhasil diambil',
-        data: formatLurahProfileResponse(lurahProfile),
+        data: {
+          ...formatLurahProfileResponse(lurahProfile),
+          key_status: keyStatus,
+        },
       });
     } catch (error) {
       next(error);

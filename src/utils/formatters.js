@@ -52,6 +52,7 @@ export const formatKependudukanResponse = (kependudukan) => ({
   agama: kependudukan.agama,
   pekerjaan: kependudukan.pekerjaan,
   kewarganegaraan: kependudukan.kewarganegaraan,
+  lingkungan_id: kependudukan.lingkunganId?.toString() || null,
 });
 
 /**
