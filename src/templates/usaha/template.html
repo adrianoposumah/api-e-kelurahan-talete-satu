@@ -11,129 +11,110 @@
       }
 
       * {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
-        box-sizing: border-box;
       }
 
       body {
-        font-family: 'Times New Roman', Times, serif;
-        font-size: 11pt;
-        line-height: 1.5;
         color: #000;
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        line-height: 1.35;
       }
 
       .container {
-        max-width: 21cm;
         margin: 0 auto;
-        padding: 0;
+        max-width: 21cm;
       }
 
-      /* KOP SURAT */
       .kop-surat {
-        display: flex;
         align-items: center;
-        padding-bottom: 10px;
         border-bottom: 3px solid #000;
+        display: flex;
         margin-bottom: 14px;
+        padding-bottom: 8px;
       }
 
       .logo {
-        width: 120px;
-        height: 120px;
+        height: 95px;
         margin-right: 20px;
+        width: 95px;
       }
 
       .logo img {
-        width: 100%;
         height: 100%;
         object-fit: contain;
+        width: 100%;
       }
 
       .kop-text {
-        text-align: center;
         flex: 1;
-        line-height: 1.05;
+        line-height: 1.1;
+        text-align: center;
       }
 
       .kop-line-1 {
-        font-size: 16pt;
-        font-weight: 500;
+        font-size: 15pt;
       }
 
       .kop-line-2 {
-        font-size: 18pt;
+        font-size: 17pt;
         font-weight: bold;
       }
 
       .kop-line-3 {
-        font-size: 24pt;
+        font-size: 21pt;
         font-weight: bold;
       }
 
-      .kop-line-4 {
-        font-size: 14pt;
-        font-weight: normal;
-      }
-
+      .kop-line-4,
       .kop-line-5 {
-        font-size: 14pt;
-        font-weight: 600;
-        letter-spacing: 3px;
+        font-size: 12pt;
       }
 
-      /* JUDUL SURAT */
       .judul-surat {
+        line-height: 1.2;
+        margin: 14px 0 16px;
         text-align: center;
-        margin: 20px 0 10px 0;
-        line-height: 1;
       }
 
       .judul-surat h1 {
         font-size: 14pt;
-        font-weight: 600;
+        font-weight: bold;
         text-decoration: underline;
-        margin-bottom: 5px;
       }
 
-      .nomor-surat {
-        font-size: 12pt;
-        font-weight: normal;
-      }
-
-      /* KONTEN */
       .content {
-        margin-top: 20px;
         text-align: justify;
       }
 
       .paragraf {
+        margin-bottom: 8px;
         text-indent: 40px;
-        margin-bottom: 10px;
       }
 
       .info-lurah {
-        margin: 12px 0 5px 40px;
+        margin: 8px 0 8px 40px;
       }
 
-      /* TABEL INFO */
       .info-pemohon {
-        margin: 12px 0 5px 40px;
+        margin: 10px 0 10px 40px;
       }
 
       .info-row {
         display: flex;
-        margin-bottom: 5px;
+        margin-bottom: 2px;
       }
 
       .info-label {
-        width: 180px;
         flex-shrink: 0;
+        width: 185px;
       }
 
       .info-separator {
-        width: 20px;
         text-align: center;
+        width: 18px;
       }
 
       .info-value {
@@ -141,91 +122,72 @@
       }
 
       .keterangan {
-        font-weight: bolder;
+        font-weight: bold;
+        margin-top: 8px;
         text-decoration: underline;
       }
 
       .keterangan-list {
-        margin: 5px 0 5px 50px;
+        margin: 5px 0 8px 48px;
       }
 
       .keterangan-list p {
-        margin-bottom: 8px;
+        margin-bottom: 5px;
+        padding-left: 18px;
         text-align: justify;
-        padding-left: 10px;
-        text-indent: -10px;
+        text-indent: -18px;
       }
 
       .list-number {
         display: inline-block;
-        width: 10px;
+        width: 18px;
       }
 
-      /* TANDA TANGAN */
       .signature-section {
-        margin-top: 20px;
         display: flex;
         justify-content: flex-end;
-        line-height: 1.05;
+        line-height: 1.2;
+        margin-top: 18px;
       }
 
       .signature-box {
         text-align: center;
-        width: 250px;
-      }
-
-      .signature-date {
-        margin-bottom: 5px;
-      }
-
-      .signature-title {
-        margin-bottom: 5px;
-      }
-
-      .signature-role {
-        margin-bottom: 10px;
-      }
-
-      tujuan-text {
-        font-weight: bold;
+        width: 260px;
       }
 
       .qr-code {
-        width: 100px;
-        height: 100px;
-        margin: 10px auto;
+        height: 84px;
+        margin: 7px auto;
+        width: 84px;
       }
 
       .qr-code img {
-        width: 100%;
         height: 100%;
+        width: 100%;
       }
 
       .signature-name {
         font-weight: bold;
-        text-transform: uppercase;
         text-decoration: underline;
-        margin-top: 10px;
+        text-transform: uppercase;
       }
 
       .signature-nip {
         font-size: 11pt;
       }
 
-      /* FOOTER */
       .footer {
-        margin-top: 20px;
+        border-top: 1px solid #bbb;
+        color: #555;
+        font-size: 8.5pt;
+        margin-top: 14px;
+        padding-top: 6px;
         text-align: center;
-        font-size: 9pt;
-        color: #666;
-        border-top: 1px solid #ccc;
-        padding-top: 10px;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <!-- KOP SURAT -->
       <div class="kop-surat">
         <div class="logo">
           <img src="{{LOGO_URL}}" alt="Logo Kota Tomohon" />
@@ -239,90 +201,48 @@
         </div>
       </div>
 
-      <!-- JUDUL SURAT -->
       <div class="judul-surat">
         <h1>SURAT KETERANGAN USAHA</h1>
-        <div class="nomor-surat">Nomor : {{NOMOR_SURAT}}</div>
+        <div>Nomor : {{NOMOR_SURAT}}</div>
       </div>
 
-      <!-- KONTEN -->
       <div class="content">
-        <p>Yang bertandatangan dibawah ini:</p>
+        <p>Yang bertanda tangan di bawah ini:</p>
+
         <div class="info-lurah">
-          <div class="info-row">
-            <span class="info-label">Nama</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{NAMA_LURAH}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">NIP</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{NIP_LURAH}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Jabatan</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">Lurah Talete Satu</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Alamat</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">Jl. Sineleyan No.118 A, Kelurahan Talete Satu,Kecamatan Tomohon Tengah, Kota Tomohon</span>
-          </div>
+          <div class="info-row"><span class="info-label">Nama</span><span class="info-separator">:</span><span class="info-value">{{NAMA_LURAH}}</span></div>
+          <div class="info-row"><span class="info-label">NIP</span><span class="info-separator">:</span><span class="info-value">{{NIP_LURAH}}</span></div>
+          <div class="info-row"><span class="info-label">Jabatan</span><span class="info-separator">:</span><span class="info-value">Lurah Talete Satu</span></div>
+          <div class="info-row"><span class="info-label">Alamat</span><span class="info-separator">:</span><span class="info-value">Jl. Sineleyan No.118 A, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon</span></div>
         </div>
-        <p>Memberikan Keterangan dengan benar bahwa:</p>
+
+        <p>Memberikan keterangan dengan benar bahwa:</p>
+
         <div class="info-pemohon">
-          <div class="info-row">
-            <span class="info-label">Nama Lengkap</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{NAMA_LENGKAP}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Jenis Kelamin</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{JENIS_KELAMIN}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Tempat, Tanggal Lahir</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{TEMPAT_LAHIR}}, {{TANGGAL_LAHIR}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Agama</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{AGAMA}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Pekerjaan</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{PEKERJAAN}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Kewarganegaraan</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{KEWARGANEGARAAN}}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Alamat</span>
-            <span class="info-separator">:</span>
-            <span class="info-value">{{ALAMAT}}</span>
-          </div>
+          <div class="info-row"><span class="info-label">Nama Lengkap</span><span class="info-separator">:</span><span class="info-value">{{NAMA_LENGKAP}}</span></div>
+          <div class="info-row"><span class="info-label">Jenis Kelamin</span><span class="info-separator">:</span><span class="info-value">{{JENIS_KELAMIN}}</span></div>
+          <div class="info-row"><span class="info-label">Tempat, Tanggal Lahir</span><span class="info-separator">:</span><span class="info-value">{{TEMPAT_LAHIR}}, {{TANGGAL_LAHIR}}</span></div>
+          <div class="info-row"><span class="info-label">Agama</span><span class="info-separator">:</span><span class="info-value">{{AGAMA}}</span></div>
+          <div class="info-row"><span class="info-label">Pekerjaan</span><span class="info-separator">:</span><span class="info-value">{{PEKERJAAN}}</span></div>
+          <div class="info-row"><span class="info-label">Status Perkawinan</span><span class="info-separator">:</span><span class="info-value">{{STATUS_PERKAWINAN}}</span></div>
+          <div class="info-row"><span class="info-label">Kewarganegaraan</span><span class="info-separator">:</span><span class="info-value">{{KEWARGANEGARAAN}}</span></div>
+          <div class="info-row"><span class="info-label">Alamat</span><span class="info-separator">:</span><span class="info-value">{{ALAMAT}}</span></div>
         </div>
+
         <p class="keterangan">KETERANGAN:</p>
         <div class="keterangan-list">
           <p><span class="list-number">1.</span>Bahwa yang bersangkutan benar penduduk yang berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
           <p><span class="list-number">2.</span>Bahwa yang bersangkutan benar memiliki usaha dengan nama "{{NAMA_USAHA}}".</p>
+          <p><span class="list-number">3.</span>Jenis usaha yang dijalankan adalah {{JENIS_USAHA}}.</p>
         </div>
 
-        <p class="paragraf">Demikian Surat Keterangan Usaha ini telah dibuat dengan benar untuk dapat dipergunakan sebgaimana mestinya.</p>
+        <p class="paragraf">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>
       </div>
 
-      <!-- TANDA TANGAN -->
       <div class="signature-section">
         <div class="signature-box">
-          <div class="signature-date">Tomohon, {{TANGGAL_PENERBITAN}}</div>
-          <div class="signature-title">Mengetahui,</div>
-          <div class="signature-role">LURAH TALETE SATU,</div>
+          <div>Tomohon, {{TANGGAL_PENERBITAN}}</div>
+          <div>LURAH TALETE SATU,</div>
           <div class="qr-code">
             <img src="{{QR_CODE_DATA}}" alt="QR Code Verifikasi" />
           </div>
@@ -331,8 +251,7 @@
         </div>
       </div>
 
-      <!-- FOOTER -->
-      <div class="footer">Dokumen ini telah ditandatangani secara elektronik dan diterbitkan melalui aplikasi e-Kelurahan Talete Satu.</div>
+      <div class="footer">Dokumen ini telah ditandatangani secara elektronik dan dapat diverifikasi melalui QR code di atas.</div>
     </div>
   </body>
 </html>

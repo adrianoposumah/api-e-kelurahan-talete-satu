@@ -3,7 +3,8 @@
   "label": "Surat Keterangan Belum Menikah",
   "name": "Surat Keterangan Belum Menikah",
   "description": "Surat keterangan belum menikah untuk keperluan administrasi",
-  "kop_type": "H.3",
+  "letterPrefix": "H.3",
+  "validityDays": 30,
   "fields": [
     { "name": "nama_lengkap", "required": true },
     { "name": "jenis_kelamin", "required": true },
@@ -48,5 +49,6 @@
     { "name": "umur_ibu", "required": true },
     { "name": "pekerjaan_ibu", "required": true },
     { "name": "alamat_ibu", "required": true }
-  ]
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "jenis_kelamin", "tempat_lahir", "tanggal_lahir", "agama", "pekerjaan", "kewarganegaraan", "alamat", "lingkungan"]
 }

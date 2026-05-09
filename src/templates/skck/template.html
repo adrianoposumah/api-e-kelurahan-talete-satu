@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Surat Keterangan Kurang Mampu</title>
+    <title>Surat Permohonan SKCK</title>
     <style>
       @page {
         size: F4;
@@ -32,7 +32,7 @@
         align-items: center;
         border-bottom: 3px solid #000;
         display: flex;
-        margin-bottom: 22px;
+        margin-bottom: 18px;
         padding-bottom: 10px;
       }
 
@@ -95,7 +95,7 @@
       }
 
       .info-pemohon {
-        margin: 16px 0 16px 40px;
+        margin: 8px 0 8px 40px;
       }
 
       .info-row {
@@ -119,16 +119,16 @@
 
       .keterangan {
         font-weight: bold;
-        margin-top: 14px;
+        margin-top: 8px;
         text-decoration: underline;
       }
 
       .keterangan-list {
-        margin: 8px 0 12px 48px;
+        margin: 4px 0 12px 48px;
       }
 
       .keterangan-list p {
-        margin-bottom: 8px;
+        margin-bottom: 4px;
         padding-left: 18px;
         text-align: justify;
         text-indent: -18px;
@@ -143,7 +143,7 @@
         display: flex;
         justify-content: flex-end;
         line-height: 1.2;
-        margin-top: 34px;
+        margin-top: 24px;
       }
 
       .signature-box {
@@ -176,7 +176,7 @@
         border-top: 1px solid #bbb;
         color: #555;
         font-size: 9pt;
-        margin-top: 22px;
+        margin-top: 14px;
         padding-top: 8px;
         text-align: center;
       }
@@ -198,7 +198,7 @@
       </div>
 
       <div class="judul-surat">
-        <h1>SURAT KETERANGAN KURANG MAMPU</h1>
+        <h1>SURAT PERMOHONAN SKCK</h1>
         <div>Nomor : {{NOMOR_SURAT}}</div>
       </div>
 
@@ -206,11 +206,12 @@
         <p class="paragraf">Yang bertanda tangan di bawah ini, Lurah Kelurahan Talete Satu Kecamatan Tomohon Tengah Kota Tomohon, menerangkan bahwa:</p>
 
         <div class="info-pemohon">
+          <div class="info-row"><span class="info-label">NIK</span><span class="info-separator">:</span><span class="info-value">{{NIK}}</span></div>
           <div class="info-row"><span class="info-label">Nama Lengkap</span><span class="info-separator">:</span><span class="info-value">{{NAMA_LENGKAP}}</span></div>
           <div class="info-row"><span class="info-label">Jenis Kelamin</span><span class="info-separator">:</span><span class="info-value">{{JENIS_KELAMIN}}</span></div>
           <div class="info-row"><span class="info-label">Tempat, Tanggal Lahir</span><span class="info-separator">:</span><span class="info-value">{{TEMPAT_LAHIR}}, {{TANGGAL_LAHIR}}</span></div>
-          <div class="info-row"><span class="info-label">Agama</span><span class="info-separator">:</span><span class="info-value">{{AGAMA}}</span></div>
           <div class="info-row"><span class="info-label">Pekerjaan</span><span class="info-separator">:</span><span class="info-value">{{PEKERJAAN}}</span></div>
+          <div class="info-row"><span class="info-label">Pendidikan Terakhir</span><span class="info-separator">:</span><span class="info-value">{{PENDIDIKAN_TERAKHIR}}</span></div>
           <div class="info-row"><span class="info-label">Status Perkawinan</span><span class="info-separator">:</span><span class="info-value">{{STATUS_PERKAWINAN}}</span></div>
           <div class="info-row"><span class="info-label">Kewarganegaraan</span><span class="info-separator">:</span><span class="info-value">{{KEWARGANEGARAAN}}</span></div>
           <div class="info-row"><span class="info-label">Alamat</span><span class="info-separator">:</span><span class="info-value">{{ALAMAT}}</span></div>
@@ -219,11 +220,12 @@
 
         <p class="keterangan">KETERANGAN:</p>
         <div class="keterangan-list">
-          <p><span class="list-number">1.</span>Bahwa yang bersangkutan benar penduduk yang berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
-          <p><span class="list-number">2.</span>Bahwa yang bersangkutan benar saat ini masuk dalam keluarga kurang mampu/ekonomi lemah.</p>
+          <p><span class="list-number">1.</span>Yang bersangkutan benar adalah warga berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
+          <p><span class="list-number">2.</span>Yang bersangkutan tidak tersangkut sesuatu perkara atau masalah dalam Kelurahan.</p>
+          <p><span class="list-number">3.</span>Yang bersangkutan benar berkelakuan baik.</p>
         </div>
 
-        <p class="paragraf">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>
+        <p class="paragraf">Demikian surat permohonan ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>
       </div>
 
       <div class="signature-section">

@@ -3,7 +3,8 @@
   "label": "Surat Keterangan Kurang Mampu",
   "name": "Surat Keterangan Kurang Mampu",
   "description": "Surat keterangan kurang mampu untuk keperluan administrasi",
-  "kop_type": "H.6",
+  "letterPrefix": "H.6",
+  "validityDays": 30,
   "fields": [
     { "name": "nama_lengkap", "required": true },
     { "name": "jenis_kelamin", "required": true },
@@ -32,5 +33,6 @@
     { "name": "kewarganegaraan", "required": true },
     { "name": "alamat", "required": true },
     { "name": "tujuan", "required": true }
-  ]
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "jenis_kelamin", "tempat_lahir", "tanggal_lahir", "agama", "pekerjaan", "kewarganegaraan", "alamat", "lingkungan"]
 }

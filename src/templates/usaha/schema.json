@@ -3,7 +3,8 @@
   "label": "Surat Keterangan Usaha",
   "name": "Surat Keterangan Usaha",
   "description": "Surat keterangan usaha untuk keperluan administrasi",
-  "kop_type": "H.6",
+  "letterPrefix": "H.6",
+  "validityDays": 30,
   "fields": [
     { "name": "nama_lengkap", "required": true },
     { "name": "jenis_kelamin", "required": true },
@@ -33,5 +34,6 @@
     { "name": "alamat", "required": true },
     { "name": "nama_usaha", "required": true },
     { "name": "jenis_usaha", "required": true }
-  ]
+  ],
+  "autoPopulatedFields": ["nama_lengkap", "jenis_kelamin", "tempat_lahir", "tanggal_lahir", "agama", "pekerjaan", "kewarganegaraan", "alamat", "lingkungan"]
 }

@@ -186,9 +186,12 @@ model ValidateRequest {
 enum SubmissionType {
   domisili
   usaha
-  kematian
-  kelakuan_baik
   keramaian
+  belum_menikah
+  keterangan_hilang
+  penghasilan
+  skck
+  tidak_mampu
 }
 
 // Enum for submission status

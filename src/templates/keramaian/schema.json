@@ -26,6 +26,6 @@
     { "name": "tempat_acara", "required": true }
   ],
   "autoPopulatedFields": ["nama_lengkap", "nik", "alamat", "lingkungan"],
-  "letterPrefix": "KR.15",
+  "letterPrefix": "H.1",
   "validityDays": 7
 }

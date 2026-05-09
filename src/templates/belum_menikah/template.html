@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Surat Keterangan Kurang Mampu</title>
+    <title>Surat Keterangan Belum Menikah</title>
     <style>
       @page {
         size: F4;
-        margin: 1.5cm 2cm;
+        margin: 1cm 1.5cm;
       }
 
       * {
@@ -19,8 +19,8 @@
       body {
         color: #000;
         font-family: 'Times New Roman', Times, serif;
-        font-size: 12pt;
-        line-height: 1.5;
+        font-size: 11pt;
+        line-height: 1.42;
       }
 
       .container {
@@ -32,14 +32,14 @@
         align-items: center;
         border-bottom: 3px solid #000;
         display: flex;
-        margin-bottom: 22px;
-        padding-bottom: 10px;
+        margin-bottom: 10px;
+        padding-bottom: 9px;
       }
 
       .logo {
-        height: 105px;
+        height: 100px;
         margin-right: 20px;
-        width: 105px;
+        width: 100px;
       }
 
       .logo img {
@@ -50,7 +50,7 @@
 
       .kop-text {
         flex: 1;
-        line-height: 1.1;
+        line-height: 1.08;
         text-align: center;
       }
 
@@ -75,7 +75,7 @@
 
       .judul-surat {
         line-height: 1.2;
-        margin: 22px 0 24px;
+        margin: 18px 0 18px;
         text-align: center;
       }
 
@@ -90,22 +90,27 @@
       }
 
       .paragraf {
-        margin-bottom: 12px;
+        margin-bottom: 9px;
         text-indent: 40px;
       }
 
-      .info-pemohon {
-        margin: 16px 0 16px 40px;
+      .info-section {
+        margin: 5px 0 5px 38px;
+      }
+
+      .section-title {
+        font-weight: bold;
+        margin-bottom: 2px;
       }
 
       .info-row {
         display: flex;
-        /* margin-bottom: 4px; */
+        /* margin-bottom: 3px; */
       }
 
       .info-label {
         flex-shrink: 0;
-        width: 185px;
+        width: 175px;
       }
 
       .info-separator {
@@ -119,16 +124,16 @@
 
       .keterangan {
         font-weight: bold;
-        margin-top: 14px;
+        margin-top: 4px;
         text-decoration: underline;
       }
 
       .keterangan-list {
-        margin: 8px 0 12px 48px;
+        margin: 6px 0 4px 48px;
       }
 
       .keterangan-list p {
-        margin-bottom: 8px;
+        /* margin-bottom: 7px; */
         padding-left: 18px;
         text-align: justify;
         text-indent: -18px;
@@ -139,11 +144,20 @@
         width: 18px;
       }
 
+      .parent-title {
+        font-weight: bold;
+        margin: 5px 0 3px 18px;
+      }
+
+      .parent-info {
+        margin: 0 0 5px 36px;
+      }
+
       .signature-section {
         display: flex;
         justify-content: flex-end;
-        line-height: 1.2;
-        margin-top: 34px;
+        line-height: 1.15;
+        margin-top: 10px;
       }
 
       .signature-box {
@@ -152,9 +166,9 @@
       }
 
       .qr-code {
-        height: 96px;
-        margin: 10px auto;
-        width: 96px;
+        height: 86px;
+        margin: 8px auto;
+        width: 86px;
       }
 
       .qr-code img {
@@ -169,15 +183,15 @@
       }
 
       .signature-nip {
-        font-size: 11pt;
+        font-size: 10.5pt;
       }
 
       .footer {
         border-top: 1px solid #bbb;
         color: #555;
-        font-size: 9pt;
-        margin-top: 22px;
-        padding-top: 8px;
+        font-size: 8.5pt;
+        margin-top: 8px;
+        padding-top: 7px;
         text-align: center;
       }
     </style>
@@ -198,14 +212,15 @@
       </div>
 
       <div class="judul-surat">
-        <h1>SURAT KETERANGAN KURANG MAMPU</h1>
+        <h1>SURAT KETERANGAN BELUM MENIKAH</h1>
         <div>Nomor : {{NOMOR_SURAT}}</div>
       </div>
 
       <div class="content">
         <p class="paragraf">Yang bertanda tangan di bawah ini, Lurah Kelurahan Talete Satu Kecamatan Tomohon Tengah Kota Tomohon, menerangkan bahwa:</p>
 
-        <div class="info-pemohon">
+        <div class="info-section">
+          <div class="section-title">Data Pemohon</div>
           <div class="info-row"><span class="info-label">Nama Lengkap</span><span class="info-separator">:</span><span class="info-value">{{NAMA_LENGKAP}}</span></div>
           <div class="info-row"><span class="info-label">Jenis Kelamin</span><span class="info-separator">:</span><span class="info-value">{{JENIS_KELAMIN}}</span></div>
           <div class="info-row"><span class="info-label">Tempat, Tanggal Lahir</span><span class="info-separator">:</span><span class="info-value">{{TEMPAT_LAHIR}}, {{TANGGAL_LAHIR}}</span></div>
@@ -219,8 +234,25 @@
 
         <p class="keterangan">KETERANGAN:</p>
         <div class="keterangan-list">
-          <p><span class="list-number">1.</span>Bahwa yang bersangkutan benar penduduk yang berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
-          <p><span class="list-number">2.</span>Bahwa yang bersangkutan benar saat ini masuk dalam keluarga kurang mampu/ekonomi lemah.</p>
+          <p><span class="list-number">1.</span>Yang bersangkutan benar adalah warga berdomisili di {{LINGKUNGAN}}, Kelurahan Talete Satu, Kecamatan Tomohon Tengah, Kota Tomohon.</p>
+          <p><span class="list-number">2.</span>Yang bersangkutan tersebut benar BELUM PERNAH MENIKAH.</p>
+          <p><span class="list-number">3.</span>Yang bersangkutan adalah anak yang sah dari:</p>
+
+          <div class="parent-title">Ayah:</div>
+          <div class="parent-info">
+            <div class="info-row"><span class="info-label">Nama</span><span class="info-separator">:</span><span class="info-value">{{NAMA_AYAH}}</span></div>
+            <div class="info-row"><span class="info-label">Umur</span><span class="info-separator">:</span><span class="info-value">{{UMUR_AYAH}} tahun</span></div>
+            <div class="info-row"><span class="info-label">Pekerjaan</span><span class="info-separator">:</span><span class="info-value">{{PEKERJAAN_AYAH}}</span></div>
+            <div class="info-row"><span class="info-label">Alamat</span><span class="info-separator">:</span><span class="info-value">{{ALAMAT_AYAH}}</span></div>
+          </div>
+
+          <div class="parent-title">Ibu:</div>
+          <div class="parent-info">
+            <div class="info-row"><span class="info-label">Nama</span><span class="info-separator">:</span><span class="info-value">{{NAMA_IBU}}</span></div>
+            <div class="info-row"><span class="info-label">Umur</span><span class="info-separator">:</span><span class="info-value">{{UMUR_IBU}} tahun</span></div>
+            <div class="info-row"><span class="info-label">Pekerjaan</span><span class="info-separator">:</span><span class="info-value">{{PEKERJAAN_IBU}}</span></div>
+            <div class="info-row"><span class="info-label">Alamat</span><span class="info-separator">:</span><span class="info-value">{{ALAMAT_IBU}}</span></div>
+          </div>
         </div>
 
         <p class="paragraf">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>

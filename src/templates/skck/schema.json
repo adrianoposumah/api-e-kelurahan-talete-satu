@@ -3,7 +3,8 @@
   "label": "Surat Permohonan SKCK",
   "name": "Surat Permohonan SKCK",
   "description": "Surat permohonan SKCK untuk keperluan administrasi",
-  "kop_type": "H.1",
+  "letterPrefix": "H.1",
+  "validityDays": 30,
   "fields": [
     { "name": "nik", "required": true },
     { "name": "nama_lengkap", "required": true },
@@ -34,5 +35,6 @@
     { "name": "kewarganegaraan", "required": true },
     { "name": "alamat", "required": true },
     { "name": "tujuan", "required": true }
-  ]
+  ],
+  "autoPopulatedFields": ["nik", "nama_lengkap", "jenis_kelamin", "tempat_lahir", "tanggal_lahir", "pekerjaan", "kewarganegaraan", "alamat", "lingkungan"]
 }
