@@ -16,14 +16,28 @@ import letterRoutes from './routes/letter.routes.js';
 import keyRoutes from './routes/key.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import env from './config/env.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const swaggerDocument = YAML.load(join(__dirname, '..', 'swagger.yaml'));
 
 const app = express();
+const allowedOrigins = env.ADMIN_DASHBOARD_URL
+  ? env.ADMIN_DASHBOARD_URL.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : [];
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(null, false);
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

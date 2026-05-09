@@ -1,11 +1,11 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
+dotenv.config();
 
-import app from './app.js';
-import ensureAdmin from './scripts/ensureAdmin.js';
+const { default: app } = await import('./app.js');
+const { default: ensureAdmin } = await import('./scripts/ensureAdmin.js');
 
 const PORT = process.env.PORT || 3000;
 
