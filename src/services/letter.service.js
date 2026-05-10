@@ -6,6 +6,8 @@ import cryptoService from './crypto.service.js';
 import pdfService from './pdf.service.js';
 import env from '../config/env.js';
 
+const GLOBAL_LETTER_COUNTER_TYPE = 'GLOBAL';
+
 const parseBigIntFilter = (value, fieldName) => {
   try {
     return BigInt(value);
@@ -32,37 +34,61 @@ class LetterService {
   }
 
   /**
-   * Generate letter identity using atomic LetterCounter.
+   * Generate letter identity using atomic global LetterCounter.
    * Verification code format: {random_8_chars}-{sequence}
-   * Letter number format: {verificationCode}/2009/D.15/{roman_month}/{year}
-   * @param {string} type - Letter type
+   * Letter number format: {verificationCode}/2009/{letterPrefix}/{roman_month}/{year}
+   * @param {string} _type - Letter type (kept for backwards-compatible calls)
    * @returns {Promise<{ verificationCode: string, letterNumber: string }>} Letter identity
    */
-  async generateLetterIdentity(type) {
+  async generateLetterIdentity(_type) {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
+    const counterType = typeof _type === 'string' ? _type.trim() : '';
+    const schema = await templateService.getSchema(counterType);
+    const letterPrefix = typeof schema.letterPrefix === 'string' ? schema.letterPrefix.trim() : '';
 
-    // Atomic increment via SQL upsert — avoids stale Prisma client model access issues.
-    const rows = await prisma.$queryRaw`
-      INSERT INTO letter_counters (letter_type, year, sequence)
-      VALUES (${type}, ${year}, 1)
-      ON CONFLICT (letter_type, year)
-      DO UPDATE SET sequence = letter_counters.sequence + 1
-      RETURNING sequence
-    `;
+    if (!letterPrefix) {
+      const error = new Error(`Letter prefix untuk tipe '${counterType}' belum dikonfigurasi`);
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const rows = await prisma.$transaction(async (tx) => {
+      // Global counter determines the actual letter number sequence.
+      const globalRows = await tx.$queryRaw`
+        INSERT INTO letter_counters (letter_type, year, sequence)
+        VALUES (${GLOBAL_LETTER_COUNTER_TYPE}, ${year}, 1)
+        ON CONFLICT (letter_type, year)
+        DO UPDATE SET sequence = letter_counters.sequence + 1
+        RETURNING sequence
+      `;
+
+      // Per-type counter is kept for yearly reporting only.
+      if (counterType && counterType !== GLOBAL_LETTER_COUNTER_TYPE) {
+        await tx.$queryRaw`
+          INSERT INTO letter_counters (letter_type, year, sequence)
+          VALUES (${counterType}, ${year}, 1)
+          ON CONFLICT (letter_type, year)
+          DO UPDATE SET sequence = letter_counters.sequence + 1
+          RETURNING sequence
+        `;
+      }
+
+      return globalRows;
+    });
 
     const sequence = Number(rows?.[0]?.sequence || 1);
     const seq = String(sequence).padStart(3, '0');
     const verificationCode = `${this.generateVerificationPrefix()}-${seq}`;
-    const letterNumber = `${verificationCode}/2009/D.15/${this.getRomanMonth(month)}/${year}`;
+    const letterNumber = `${verificationCode}/2009/${letterPrefix}/${this.getRomanMonth(month)}/${year}`;
 
     return { verificationCode, letterNumber };
   }
 
   /**
-   * Generate letter number using atomic LetterCounter.
-   * Format: {random_8_chars}-{sequence}/2009/D.15/{roman_month}/{year}
+   * Generate letter number using atomic global LetterCounter.
+   * Format: {random_8_chars}-{sequence}/2009/{letterPrefix}/{roman_month}/{year}
    * @param {string} type - Letter type
    * @returns {Promise<string>} Letter number
    */

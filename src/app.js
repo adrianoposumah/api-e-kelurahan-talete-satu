@@ -22,22 +22,33 @@ const __dirname = dirname(__filename);
 const swaggerDocument = YAML.load(join(__dirname, '..', 'swagger.yaml'));
 
 const app = express();
-const allowedOrigins = env.ADMIN_DASHBOARD_URL
-  ? env.ADMIN_DASHBOARD_URL.split(',').map((origin) => origin.trim()).filter(Boolean)
-  : [];
+const allowedOrigins = [
+  ...(env.ADMIN_DASHBOARD_URL
+    ? env.ADMIN_DASHBOARD_URL.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : []),
+  ...(env.VERIFICATION_URL
+    ? env.VERIFICATION_URL.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : []),
+].filter((v, i, a) => v && a.indexOf(v) === i);
 
 // Middleware
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
 
-    callback(null, false);
-  },
-  credentials: true,
-}));
+      callback(null, false);
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
