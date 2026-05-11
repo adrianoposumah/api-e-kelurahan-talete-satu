@@ -4,11 +4,15 @@ import prisma from '../config/prisma.js';
 /**
  * Crypto Service - Handles digital signatures and key management
  * RSA-4096 with SHA-256, AES-256-GCM for private key encryption
+ *
+ * Canonical data v1.1 includes body_hash and signed_at so signatures
+ * protect both structured fields and the rendered PDF text content.
  */
 class CryptoService {
   constructor() {
     this.algorithm = 'RSA-SHA256';
     this.keySize = 4096;
+    this.scryptParams = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
   }
 
   // ==================== CORE CRYPTOGRAPHIC FUNCTIONS ====================
@@ -42,7 +46,7 @@ class CryptoService {
    */
   encryptPrivateKey(privateKeyPem, passphrase) {
     const salt = crypto.randomBytes(32);
-    const key = crypto.scryptSync(passphrase, salt, 32);
+    const key = crypto.scryptSync(passphrase, salt, 32, this.scryptParams);
     const iv = crypto.randomBytes(12);
 
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -70,7 +74,7 @@ class CryptoService {
       const authTag = Buffer.from(authTagB64, 'base64');
       const ciphertext = Buffer.from(ciphertextB64, 'base64');
 
-      const key = crypto.scryptSync(passphrase, salt, 32);
+      const key = crypto.scryptSync(passphrase, salt, 32, this.scryptParams);
 
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
       decipher.setAuthTag(authTag);
@@ -265,6 +269,45 @@ class CryptoService {
   }
 
   /**
+   * Change a Lurah key passphrase by decrypting the private key with the old
+   * passphrase and re-encrypting it with the new one.
+   * @param {string|BigInt} keyId - LurahKey ID
+   * @param {string} oldPassphrase - Current passphrase
+   * @param {string} newPassphrase - Replacement passphrase
+   * @returns {Promise<{ success: boolean }>} Operation result
+   */
+  async changePassphrase(keyId, oldPassphrase, newPassphrase) {
+    const keyRecord = await prisma.lurahKey.findUnique({
+      where: { id: BigInt(keyId) },
+    });
+
+    if (!keyRecord) {
+      const error = new Error('Key tidak ditemukan');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    let privateKey;
+    try {
+      privateKey = this.decryptPrivateKey(keyRecord.encryptedPrivateKey, oldPassphrase);
+    } catch {
+      const error = new Error('Passphrase lama tidak valid');
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const newEncrypted = this.encryptPrivateKey(privateKey, newPassphrase);
+    privateKey = null;
+
+    await prisma.lurahKey.update({
+      where: { id: BigInt(keyId) },
+      data: { encryptedPrivateKey: newEncrypted },
+    });
+
+    return { success: true };
+  }
+
+  /**
    * Get current active public key
    * @returns {Promise<object|null>} { id, publicKey } or null if none
    */
@@ -408,17 +451,24 @@ class CryptoService {
   // ==================== CANONICAL DATA & SIGNING ====================
 
   /**
-   * Build canonical data in deterministic JSON format.
+   * Build canonical data v1.1 in deterministic JSON format.
    * Fields are defined in a fixed order to ensure deterministic output.
    * @param {object} letterData - Letter data
    * @param {object} issuerData - Issuer (Lurah) data
-   * @param {object} metadata - Additional metadata
+   * @param {object} metadata - Additional metadata with bodyHash and signedAt
    * @returns {string} Canonical data JSON string
    */
   buildCanonicalData(letterData, issuerData, metadata) {
-    // Fixed-order canonical structure — order matters for determinism
+    if (!metadata.bodyHash) {
+      throw new Error('bodyHash is required in canonical metadata (v1.1)');
+    }
+    if (!metadata.signedAt) {
+      throw new Error('signedAt is required in canonical metadata (v1.1)');
+    }
+
+    // Fixed-order canonical structure - order matters for determinism.
     const canonical = {
-      version: '1.0',
+      version: '1.1',
       type: letterData.type,
       nomor_surat: letterData.nomorSurat,
       nama: letterData.nama,
@@ -427,6 +477,8 @@ class CryptoService {
       lingkungan: letterData.lingkungan,
       tujuan: letterData.tujuan || null,
       issued_date: metadata.issuedDate,
+      signed_at: metadata.signedAt,
+      body_hash: metadata.bodyHash,
       issuer: {
         nama_lurah: issuerData.namaLurah,
         nip_lurah: issuerData.nipLurah,
@@ -441,6 +493,21 @@ class CryptoService {
 
     // Use JSON.stringify without replacer — keys already in deterministic order
     return JSON.stringify(canonical);
+  }
+
+  /**
+   * Extract body_hash from canonical JSON.
+   * Returns null for malformed canonical data or legacy v1.0 payloads.
+   * @param {string} canonicalData - Canonical JSON string
+   * @returns {string|null} Body hash if present
+   */
+  extractBodyHashFromCanonical(canonicalData) {
+    try {
+      const parsed = JSON.parse(canonicalData);
+      return parsed.body_hash || null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -470,7 +537,7 @@ class CryptoService {
    *
    * @param {object} letterData - Letter data fields
    * @param {object} issuerData - Issuer (Lurah) data
-   * @param {object} metadata - Metadata (verificationCode, issuedDate)
+   * @param {object} metadata - Metadata (verificationCode, issuedDate, signedAt, bodyHash)
    * @param {object} keyRecord - LurahKey record (with encryptedPrivateKey, publicKey, id)
    * @param {string} passphrase - Passphrase to decrypt private key
    * @returns {Promise<object>} Signature artifacts
