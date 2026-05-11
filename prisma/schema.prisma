@@ -393,3 +393,18 @@ model LetterCounter {
   @@id([letterType, year])
   @@map("letter_counters")
 }
+
+// Verification attempt audit log
+model VerificationLog {
+  id               BigInt   @id @default(autoincrement()) @db.BigInt
+  verificationCode String?  @map("verification_code")
+  decisionStatus   String   @map("decision_status")
+  serverPass       Boolean  @map("server_pass")
+  cryptoPass       Boolean  @map("crypto_pass")
+  bodyPass         Boolean  @map("body_pass")
+  attemptedAt      DateTime @default(now()) @map("attempted_at")
+
+  @@map("verification_logs")
+  @@index([verificationCode])
+  @@index([attemptedAt])
+}
