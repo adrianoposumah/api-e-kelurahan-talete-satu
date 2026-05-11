@@ -21,7 +21,7 @@ const parseBigIntFilter = (value, fieldName) => {
 /**
  * Letter Service - Letter number, QR, PDF generation, signing
  *
- * Orchestrates the 7-phase letter issuance pipeline triggered
+ * Orchestrates the 8-phase letter issuance pipeline triggered
  * when the Lurah approves a submission.
  */
 class LetterService {
@@ -36,7 +36,7 @@ class LetterService {
   /**
    * Generate letter identity using atomic global LetterCounter.
    * Verification code format: {random_8_chars}-{sequence}
-   * Letter number format: {verificationCode}/2009/{letterPrefix}/{roman_month}/{year}
+   * Letter number format: {verificationCode}/{kelurahanCode}/{letterPrefix}/{roman_month}/{year}
    * @param {string} _type - Letter type (kept for backwards-compatible calls)
    * @returns {Promise<{ verificationCode: string, letterNumber: string }>} Letter identity
    */
@@ -81,14 +81,15 @@ class LetterService {
     const sequence = Number(rows?.[0]?.sequence || 1);
     const seq = String(sequence).padStart(3, '0');
     const verificationCode = `${this.generateVerificationPrefix()}-${seq}`;
-    const letterNumber = `${verificationCode}/2009/${letterPrefix}/${this.getRomanMonth(month)}/${year}`;
+    const kelurahanCode = env.KELURAHAN_CODE || '2009';
+    const letterNumber = `${verificationCode}/${kelurahanCode}/${letterPrefix}/${this.getRomanMonth(month)}/${year}`;
 
     return { verificationCode, letterNumber };
   }
 
   /**
    * Generate letter number using atomic global LetterCounter.
-   * Format: {random_8_chars}-{sequence}/2009/{letterPrefix}/{roman_month}/{year}
+   * Format: {random_8_chars}-{sequence}/{kelurahanCode}/{letterPrefix}/{roman_month}/{year}
    * @param {string} type - Letter type
    * @returns {Promise<string>} Letter number
    */
@@ -124,14 +125,15 @@ class LetterService {
   /**
    * Issue a letter when the Lurah approves a submission.
    *
-   * Executes a 7-phase pipeline per AGENTS.md:
+   * Executes the v1.1 8-phase pipeline:
    *   [1] Generate letter number (auto via LetterCounter)
-   *   [2] Generate QR code data URL
-   *   [3] Render HTML template → generate PDF bytes
-   *   [4] Build canonical payload → compute hash → RSA-sign with lurah private key
-   *   [5] Embed signature into PDF XMP metadata
+   *   [2] Render HTML template → raw PDF bytes
+   *   [3] Compute body hash from raw PDF text
+   *   [4] Build canonical payload with body_hash → RSA-sign with lurah private key
+   *   [5] Embed signature into PDF metadata
    *   [6] Save signed PDF to disk
-   *   [7] Update submission record → status APPROVED
+   *   [7] Create issued letter record
+   *   [8] Update submission record → status APPROVED
    *
    * @param {object} params - Issue parameters
    * @param {string|BigInt} params.submissionId - Submission ID
@@ -208,8 +210,12 @@ class LetterService {
       verificationUrl,
     });
 
-    // ==================== PHASE 3: Render HTML template ====================
+    // ==================== PHASE 2: Render HTML template → raw PDF ====================
     const html = await templateService.renderTemplate(submission.type, templateData);
+    const { pdfBuffer: rawPdfBuffer } = await pdfService.renderHtmlToPdf({ html, verificationUrl });
+
+    // ==================== PHASE 3: Compute body hash ====================
+    const bodyHash = await pdfService.computeContentHash(rawPdfBuffer);
 
     // ==================== PHASE 4: Build canonical → hash → sign ====================
     const letterData = {
@@ -231,21 +237,24 @@ class LetterService {
     };
 
     const issuedDate = new Date().toISOString();
+    const signedAt = new Date().toISOString();
     const metadata = {
       verificationCode,
       issuedDate,
+      signedAt,
+      bodyHash,
     };
 
     // Sign with Lurah's private key (passphrase decrypts it)
     const signatureData = await cryptoService.createLetterSignature(letterData, issuerData, metadata, keyRecord, passphrase);
 
-    // ==================== PHASES 2, 5, 6: QR + Embed XMP + Save PDF ====================
-    const pdfResult = await pdfService.generateLetterPdf({
-      html,
+    // ==================== PHASES 5-6: Embed metadata + save PDF ====================
+    const pdfResult = await pdfService.finalizeSignedPdf({
+      rawPdfBuffer,
       verificationCode,
-      verificationUrl,
       letterNumber,
       issuedDate,
+      signedAt,
       signatureData,
     });
 
@@ -269,41 +278,23 @@ class LetterService {
         },
       });
 
-      // Create issued letter record. If runtime Prisma client is stale and does not
-      // expose `signatureKeyId` yet, retry without it so signing flow stays available.
-      const issuedLetterData = {
-        submissionId: BigInt(submissionId),
-        letterNumber,
-        verificationCode,
-        type: submission.type,
-        keterangan: keterangan || null,
-        canonicalData: signatureData.canonicalData,
-        canonicalHash: signatureData.canonicalHash,
-        signature: signatureData.signature,
-        signedBy: keyRecord.lurahProfileId,
-        pdfPath: pdfResult.relativePath,
-        expiresAt,
-      };
-
-      let issuedLetter;
-      try {
-        issuedLetter = await tx.issuedLetter.create({
-          data: {
-            ...issuedLetterData,
-            signatureKeyId: keyRecord.id,
-          },
-        });
-      } catch (error) {
-        const isUnknownSignatureKeyId = error?.name === 'PrismaClientValidationError' && String(error?.message || '').includes('Unknown argument `signatureKeyId`');
-
-        if (!isUnknownSignatureKeyId) {
-          throw error;
-        }
-
-        issuedLetter = await tx.issuedLetter.create({
-          data: issuedLetterData,
-        });
-      }
+      // Create issued letter record with the exact signing key ID.
+      const issuedLetter = await tx.issuedLetter.create({
+        data: {
+          submissionId: BigInt(submissionId),
+          letterNumber,
+          verificationCode,
+          type: submission.type,
+          keterangan: keterangan || null,
+          canonicalData: signatureData.canonicalData,
+          canonicalHash: signatureData.canonicalHash,
+          signature: signatureData.signature,
+          signatureKeyId: keyRecord.id,
+          signedBy: keyRecord.lurahProfileId,
+          pdfPath: pdfResult.relativePath,
+          expiresAt,
+        },
+      });
 
       // Update submission status to approved (letter generated + digitally signed)
       await tx.submission.update({
@@ -320,6 +311,7 @@ class LetterService {
       verificationCode,
       verificationUrl,
       pdfPath: pdfResult.relativePath,
+      bodyHash,
       expiresAt,
     };
   }
@@ -383,67 +375,22 @@ class LetterService {
   // ==================== VERIFICATION ====================
 
   /**
-   * Verify letter authenticity
+   * Verify letter authenticity through the unified hybrid verification flow.
    * @param {string} verificationCode - Verification code
    * @returns {Promise<object>} Verification result
    */
   async verifyLetter(verificationCode) {
-    const letter = await this.getLetterByVerificationCode(verificationCode);
+    return this.verifyLetterByCode(verificationCode);
+  }
 
-    // Look up the public key — prefer signatureKeyId (exact match)
-    const keyRecord = letter.signatureKeyId
-      ? await prisma.lurahKey.findUnique({ where: { id: letter.signatureKeyId } })
-      : await prisma.lurahKey.findFirst({
-          where: { lurahProfileId: letter.signedBy },
-          orderBy: { createdAt: 'desc' },
-        });
-
-    if (!keyRecord) {
-      return {
-        valid: false,
-        reason: 'Kunci publik penanda tangan tidak ditemukan',
-        letter: null,
-      };
-    }
-
-    // Verify digital signature
-    const isValid = cryptoService.verifyLetterSignature(letter.canonicalData, letter.signature, keyRecord.publicKey);
-
-    // Check revocation
-    if (letter.isRevoked) {
-      return {
-        valid: false,
-        reason: `Surat telah dicabut: ${letter.revokedReason || 'Tidak ada alasan'}`,
-        revokedAt: letter.revokedAt,
-        letter: this.formatLetterForPublic(letter),
-      };
-    }
-
-    // Check expiry
-    if (letter.expiresAt && new Date() > letter.expiresAt) {
-      return {
-        valid: false,
-        reason: 'Surat sudah kadaluarsa',
-        expiredAt: letter.expiresAt,
-        letter: this.formatLetterForPublic(letter),
-      };
-    }
-
-    if (!isValid) {
-      return {
-        valid: false,
-        reason: 'Tanda tangan digital tidak valid',
-        letter: null,
-      };
-    }
-
-    return {
-      valid: true,
-      message: 'Surat ini asli dan masih berlaku',
-      letter: this.formatLetterForPublic(letter),
-      issuedAt: letter.issuedAt,
-      expiresAt: letter.expiresAt,
-    };
+  /**
+   * Verify a generated PDF by verification code through verification.service.js.
+   * @param {string} verificationCode - Verification code
+   * @returns {Promise<object>} Hybrid verification result
+   */
+  async verifyLetterByCode(verificationCode) {
+    const verificationService = (await import('./verification.service.js')).default;
+    return verificationService.verifyLetterByCode(verificationCode);
   }
 
   /**
