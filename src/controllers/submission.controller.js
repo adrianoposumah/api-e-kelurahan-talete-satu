@@ -301,6 +301,38 @@ class SubmissionController {
   }
 
   /**
+   * GET /submissions/kepling/history - Get completed submission history for kepling's lingkungan
+   */
+  async getSubmissionHistoryForKepling(req, res, next) {
+    try {
+      const keplingUserId = req.user.userId;
+      const { page, limit, type, diterima, ditolak } = req.query;
+
+      const { submissions, pagination } = await submissionService.getSubmissionHistoryForKepling({
+        keplingUserId,
+        page,
+        limit,
+        type,
+        diterima,
+        ditolak,
+      });
+
+      res.json({
+        data: submissions.map(formatSubmissionByUserResponse),
+        pagination,
+      });
+    } catch (error) {
+      if (error.code === 'FORBIDDEN') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
    * GET /submissions/kepling/:id - Get submission detail by ID for kepling
    */
   async getSubmissionKeplingDetailById(req, res, next) {
@@ -430,6 +462,30 @@ class SubmissionController {
         limit,
         diproses,
         selesai,
+      });
+
+      res.json({
+        data: submissions.map(formatSubmissionByUserResponse),
+        pagination,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /submissions/lurah/history - Get completed submission history for lurah
+   */
+  async getSubmissionHistoryForLurah(req, res, next) {
+    try {
+      const { page, limit, type, diterima, ditolak } = req.query;
+
+      const { submissions, pagination } = await submissionService.getSubmissionHistoryForLurah({
+        page,
+        limit,
+        type,
+        diterima,
+        ditolak,
       });
 
       res.json({

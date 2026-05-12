@@ -30,6 +30,9 @@ router.delete('/:id', requireRole('warga'), submissionController.deleteSubmissio
 // GET /submissions/kepling/list - Get submissions for kepling's lingkungan
 router.get('/kepling/list', requireRole('kepling'), submissionController.getSubmissionsForKepling.bind(submissionController));
 
+// GET /submissions/kepling/history - Get completed submission history for kepling's lingkungan
+router.get('/kepling/history', requireRole('kepling'), submissionController.getSubmissionHistoryForKepling.bind(submissionController));
+
 // GET /submissions/kepling/:id - Get submission detail by ID for kepling
 router.get('/kepling/:id', requireRole('kepling'), submissionController.getSubmissionKeplingDetailById.bind(submissionController));
 
@@ -43,6 +46,9 @@ router.post('/:id/kepling/reject', requireRole('kepling'), submissionController.
 
 // GET /submissions/lurah/list - Get all submissions for lurah
 router.get('/lurah/list', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionsForLurah.bind(submissionController));
+
+// GET /submissions/lurah/history - Get completed submission history for lurah
+router.get('/lurah/history', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionHistoryForLurah.bind(submissionController));
 
 // GET /submissions/lurah/:id - Get submission detail by ID for lurah
 router.get('/lurah/:id', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionLurahDetailById.bind(submissionController));

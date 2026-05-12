@@ -201,9 +201,9 @@ class PdfService {
     // Set standard PDF metadata
     pdfDoc.setTitle(metadata.letterNumber ? `Surat ${metadata.letterNumber}` : 'Surat Elektronik');
     pdfDoc.setSubject('Surat Elektronik Kelurahan Talete Satu');
-    pdfDoc.setAuthor('e-Kelurahan Talete Satu');
-    pdfDoc.setCreator('e-Kelurahan Digital Signature System');
-    pdfDoc.setProducer('e-Kelurahan Talete Satu');
+    pdfDoc.setAuthor('SIAK Talete Satu');
+    pdfDoc.setCreator('SIAK Talete Satu Digital Signature System');
+    pdfDoc.setProducer('SIAK Talete Satu');
     pdfDoc.setKeywords([metadata.letterNumber || '', metadata.verificationCode || ''].filter(Boolean));
 
     // Embed cryptographic fields as custom entries in the PDF Info Dictionary

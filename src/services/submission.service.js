@@ -25,6 +25,33 @@ const parseCreatedAtSort = (value) => {
   throw error;
 };
 
+const isEnabledQuery = (value) => value !== undefined && value !== false && value !== 'false' && value !== '0';
+
+const buildSubmissionHistoryStatusFilter = ({ diterima, ditolak, rejectionStages }) => {
+  const showDiterima = isEnabledQuery(diterima);
+  const showDitolak = isEnabledQuery(ditolak);
+  const showAll = !showDiterima && !showDitolak;
+  const statusFilter = [];
+
+  if (showDiterima || showAll) {
+    statusFilter.push({ status: { in: ['approved', 'issued'] } });
+  }
+
+  if (showDitolak || showAll) {
+    statusFilter.push({
+      status: 'rejected',
+      approvals: {
+        some: {
+          stage: Array.isArray(rejectionStages) ? { in: rejectionStages } : rejectionStages,
+          status: 'rejected',
+        },
+      },
+    });
+  }
+
+  return statusFilter;
+};
+
 /**
  * Submission Service - Handles submission workflow business logic
  */
@@ -346,6 +373,76 @@ class SubmissionService {
   }
 
   /**
+   * Get completed submission history for kepling's lingkungan
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submissions and pagination
+   */
+  async getSubmissionHistoryForKepling({ keplingUserId, page = 1, limit = 10, type, diterima, ditolak }) {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const statusFilter = buildSubmissionHistoryStatusFilter({
+      diterima,
+      ditolak,
+      rejectionStages: ['kepling', 'lurah'],
+    });
+
+    // Get kepling's active lingkungan assignments
+    const keplingAssignments = await prisma.lingkunganKepling.findMany({
+      where: {
+        userId: BigInt(keplingUserId),
+        selesai: null, // Active only
+      },
+    });
+
+    if (keplingAssignments.length === 0) {
+      const error = new Error('Kepling tidak memiliki lingkungan yang ditugaskan');
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const lingkunganIds = keplingAssignments.map((a) => a.lingkunganId);
+
+    const where = {
+      lingkunganId: { in: lingkunganIds },
+      OR: statusFilter,
+    };
+    if (type) where.type = type;
+
+    const [submissions, total] = await Promise.all([
+      prisma.submission.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
+        },
+      }),
+      prisma.submission.count({ where }),
+    ]);
+
+    return {
+      submissions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        total_pages: Math.ceil(total / parseInt(limit)),
+      },
+    };
+  }
+
+  /**
    * Get submission detail by ID for kepling
    * @param {object} options - Query options
    * @returns {Promise<object>} Submission detail
@@ -431,6 +528,59 @@ class SubmissionService {
         },
       );
     }
+
+    const where = {
+      OR: statusFilter,
+    };
+    if (type) where.type = type;
+
+    const [submissions, total] = await Promise.all([
+      prisma.submission.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          userId: true,
+          lingkunganId: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              nama: true,
+            },
+          },
+        },
+      }),
+      prisma.submission.count({ where }),
+    ]);
+
+    return {
+      submissions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        total_pages: Math.ceil(total / parseInt(limit)),
+      },
+    };
+  }
+
+  /**
+   * Get completed submission history for lurah
+   * @param {object} options - Query options
+   * @returns {Promise<object>} Submissions and pagination
+   */
+  async getSubmissionHistoryForLurah({ page = 1, limit = 50, type, diterima, ditolak }) {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const statusFilter = buildSubmissionHistoryStatusFilter({
+      diterima,
+      ditolak,
+      rejectionStages: 'lurah',
+    });
 
     const where = {
       OR: statusFilter,
