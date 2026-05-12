@@ -379,3 +379,23 @@ export const formatIssuedLetterResponse = (letter) => ({
       }
     : undefined,
 });
+
+// ==================== NOTIFICATION FORMATTERS ====================
+
+/**
+ * Format notification object for API response
+ * @param {object} notification - Notification object from database
+ * @returns {object} Formatted notification object
+ */
+export const formatNotificationResponse = (notification) => ({
+  id: notification.id.toString(),
+  user_id: notification.userId.toString(),
+  type: notification.type,
+  title: notification.title,
+  body: notification.body,
+  data: notification.data,
+  is_read: Boolean(notification.readAt),
+  read_at: notification.readAt,
+  created_at: notification.createdAt,
+  updated_at: notification.updatedAt,
+});

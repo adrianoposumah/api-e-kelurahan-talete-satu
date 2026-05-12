@@ -8,6 +8,7 @@ const env = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN,
   VERIFICATION_URL: process.env.VERIFICATION_URL,
   ADMIN_DASHBOARD_URL: process.env.ADMIN_DASHBOARD_URL,
+  KELURAHAN_CODE: process.env.KELURAHAN_CODE || '2009',
 };
 
 export default env;

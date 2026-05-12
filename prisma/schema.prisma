@@ -65,6 +65,7 @@ model User {
   approvals      SubmissionApproval[]
   lurahProfiles  LurahProfile[]
   sekertarisProfile SekertarisProfile?
+  notifications  Notification[]
 
   @@map("users")
 }
@@ -392,4 +393,46 @@ model LetterCounter {
 
   @@id([letterType, year])
   @@map("letter_counters")
+}
+
+// Verification attempt audit log
+model VerificationLog {
+  id               BigInt   @id @default(autoincrement()) @db.BigInt
+  verificationCode String?  @map("verification_code")
+  decisionStatus   String   @map("decision_status")
+  serverPass       Boolean  @map("server_pass")
+  cryptoPass       Boolean  @map("crypto_pass")
+  bodyPass         Boolean  @map("body_pass")
+  attemptedAt      DateTime @default(now()) @map("attempted_at")
+
+  @@map("verification_logs")
+  @@index([verificationCode])
+  @@index([attemptedAt])
+}
+
+enum NotificationType {
+  submission
+  announcement
+  other
+}
+
+// User notification inbox
+model Notification {
+  id        BigInt    @id @default(autoincrement()) @db.BigInt
+  userId    BigInt    @map("user_id") @db.BigInt
+  type      NotificationType @default(other)
+  title     String    @db.VarChar(255)
+  body      String    @db.Text
+  data      Json?     @db.Json
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("notifications")
 }

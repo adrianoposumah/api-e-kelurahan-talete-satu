@@ -14,9 +14,10 @@ const PUBLIC_LETTERS_DIR = resolve(PROJECT_ROOT, 'public', 'letters');
 /**
  * Verification Service - Hybrid verification for uploaded letter PDF files.
  *
- * Validation is split into two independent checks:
+ * Validation is split into three independent checks:
  * 1) Server-based check against DB records.
  * 2) Cryptographic check against stored public key.
+ * 3) Body content check against signed body_hash.
  */
 class VerificationService {
   /**
@@ -133,6 +134,15 @@ class VerificationService {
         pass: false,
         status: 'revoked',
         reason: `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`,
+        issuedLetter,
+      };
+    }
+
+    if (issuedLetter.expiresAt && new Date() > issuedLetter.expiresAt) {
+      return {
+        pass: false,
+        status: 'expired',
+        reason: `Letter expired on ${issuedLetter.expiresAt.toISOString()}`,
         issuedLetter,
       };
     }
@@ -298,57 +308,116 @@ class VerificationService {
   }
 
   /**
-   * Combine server and crypto checks into the public verification decision.
-   * @param {object} serverResult - Server-side check result
-   * @param {object} cryptoResult - Cryptographic check result
-   * @returns {{ valid: boolean, status: string, message: string }}
+   * Run body integrity verification against the signed canonical body_hash.
+   * Legacy v1.0 letters do not have body_hash and are skipped for compatibility.
+   * @param {Buffer} pdfBuffer - Uploaded PDF bytes
+   * @param {object} metadata - Extracted PDF metadata
+   * @param {object|null} issuedLetter - Server-side issued letter record
+   * @returns {Promise<object>} Body check result
    */
-  decideVerificationResult(serverResult, cryptoResult) {
-    if (serverResult.status === 'revoked' && cryptoResult.pass) {
+  async runBodyCheck(pdfBuffer, metadata, issuedLetter) {
+    const canonicalData = issuedLetter?.canonicalData || this.decodeCanonicalPayload(metadata);
+
+    if (!canonicalData) {
       return {
-        valid: false,
-        status: 'REVOKED',
-        message: 'Surat Revoked',
+        pass: false,
+        reason: 'Canonical data unavailable for body integrity check',
       };
     }
 
-    if (serverResult.status === 'not_found' && cryptoResult.pass) {
+    const expectedBodyHash = cryptoService.extractBodyHashFromCanonical(canonicalData);
+
+    if (!expectedBodyHash) {
       return {
-        valid: false,
-        status: 'FAKE',
-        message: 'Surat Palsu',
+        pass: true,
+        skipped: true,
+        reason: 'Letter signed without body hash (pre-v1.1) — body integrity not verifiable',
       };
     }
 
-    if (serverResult.pass && !cryptoResult.pass) {
+    let actualBodyHash;
+    try {
+      actualBodyHash = await pdfService.computeContentHash(pdfBuffer);
+    } catch (error) {
       return {
-        valid: false,
-        status: 'MODIFIED',
-        message: 'Surat dimodifikasi',
+        pass: false,
+        reason: `Failed to extract PDF text content: ${error.message}`,
       };
     }
 
-    if (!serverResult.pass && !cryptoResult.pass) {
+    if (actualBodyHash !== expectedBodyHash) {
       return {
-        valid: false,
-        status: 'FAKE_OR_NOT_FOUND',
-        message: 'Surat Palsu/Tidak ada',
-      };
-    }
-
-    if (serverResult.pass && cryptoResult.pass) {
-      return {
-        valid: true,
-        status: 'VALID',
-        message: 'Surat Valid',
+        pass: false,
+        reason: 'PDF body content has been modified after signing',
+        expectedBodyHash,
+        actualBodyHash,
       };
     }
 
     return {
-      valid: false,
-      status: 'INVALID',
-      message: 'Surat tidak valid',
+      pass: true,
+      reason: 'PDF body content matches signed hash',
+      expectedBodyHash,
+      actualBodyHash,
     };
+  }
+
+  /**
+   * Combine server, crypto, and body checks into the public verification decision.
+   * @param {object} serverResult - Server-side check result
+   * @param {object} cryptoResult - Cryptographic check result
+   * @param {object} bodyResult - Body content check result
+   * @returns {{ valid: boolean, status: string, message: string }}
+   */
+  decideVerificationResult(serverResult, cryptoResult, bodyResult) {
+    const serverStatus = serverResult.status;
+    const cryptoPass = cryptoResult.pass;
+    const bodyPass = bodyResult.pass;
+
+    if (serverStatus === 'not_found') {
+      if (cryptoPass && bodyPass) {
+        return { valid: false, status: 'NOT_REGISTERED', message: 'Surat tidak terdaftar di sistem' };
+      }
+      return { valid: false, status: 'FAKE', message: 'Surat palsu' };
+    }
+
+    if (serverStatus === 'malformed_metadata' || serverStatus === 'metadata_error') {
+      return { valid: false, status: 'MALFORMED', message: 'Metadata surat tidak valid' };
+    }
+
+    if (serverStatus === 'not_approved') {
+      return { valid: false, status: 'NOT_APPROVED', message: 'Surat belum disahkan' };
+    }
+
+    if (serverStatus === 'mismatch') {
+      if (cryptoPass) {
+        return { valid: false, status: 'RECORD_MISMATCH', message: 'Data surat tidak cocok dengan rekaman server' };
+      }
+      return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
+    }
+
+    if (serverStatus === 'revoked') {
+      if (cryptoPass && bodyPass) {
+        return { valid: false, status: 'REVOKED', message: 'Surat telah dicabut' };
+      }
+      return { valid: false, status: 'REVOKED_AND_MODIFIED', message: 'Surat telah dicabut dan dimodifikasi' };
+    }
+
+    if (serverStatus === 'expired') {
+      if (cryptoPass && bodyPass) {
+        return { valid: false, status: 'EXPIRED', message: 'Surat sudah kadaluarsa' };
+      }
+      return { valid: false, status: 'EXPIRED_AND_MODIFIED', message: 'Surat sudah kadaluarsa dan dimodifikasi' };
+    }
+
+    if (serverStatus === 'pass') {
+      if (cryptoPass && bodyPass) return { valid: true, status: 'VALID', message: 'Surat valid' };
+      if (!cryptoPass && !bodyPass) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
+      if (!cryptoPass) return { valid: false, status: 'CANONICAL_MODIFIED', message: 'Data tanda tangan dimodifikasi' };
+      if (!bodyPass) return { valid: false, status: 'BODY_MODIFIED', message: 'Isi surat dimodifikasi' };
+    }
+
+    return { valid: false, status: 'INVALID', message: 'Surat tidak valid' };
   }
 
   /**
@@ -364,8 +433,8 @@ class VerificationService {
     } catch (error) {
       return {
         valid: false,
-        status: 'FAKE_OR_NOT_FOUND',
-        message: 'Surat Palsu/Tidak ada',
+        status: 'MALFORMED',
+        message: 'Metadata surat tidak valid',
         serverCheck: {
           pass: false,
           status: 'metadata_error',
@@ -373,8 +442,12 @@ class VerificationService {
         },
         cryptoCheck: {
           pass: false,
-          reason: 'Canonical payload is not available for cryptographic verification',
+          reason: 'Cannot verify without metadata',
           keyStatus: null,
+        },
+        bodyCheck: {
+          pass: false,
+          reason: 'Cannot verify body without metadata',
         },
         letter: null,
       };
@@ -382,7 +455,16 @@ class VerificationService {
 
     const serverResult = await this.runServerCheck(metadata);
     const cryptoResult = await this.runCryptoCheck(metadata, serverResult.issuedLetter);
-    const decision = this.decideVerificationResult(serverResult, cryptoResult);
+    const bodyResult = await this.runBodyCheck(pdfBuffer, metadata, serverResult.issuedLetter);
+    const decision = this.decideVerificationResult(serverResult, cryptoResult, bodyResult);
+
+    this.recordVerificationAttempt({
+      verificationCode: metadata.verificationCode,
+      decision: decision.status,
+      serverPass: serverResult.pass,
+      cryptoPass: cryptoResult.pass,
+      bodyPass: bodyResult.pass,
+    }).catch(() => {});
 
     return {
       valid: decision.valid,
@@ -397,6 +479,11 @@ class VerificationService {
         pass: cryptoResult.pass,
         reason: cryptoResult.reason,
         keyStatus: cryptoResult.keyStatus,
+      },
+      bodyCheck: {
+        pass: bodyResult.pass,
+        reason: bodyResult.reason,
+        skipped: bodyResult.skipped || false,
       },
       letter: decision.valid
         ? {
@@ -451,6 +538,26 @@ class VerificationService {
         dataUrl: `data:application/pdf;base64,${storedPdf.buffer.toString('base64')}`,
       },
     };
+  }
+
+  /**
+   * Record a verification attempt for audit and forensics.
+   * This is best-effort and remains a no-op until the optional Prisma model exists.
+   * @param {object} params - Audit log parameters
+   * @returns {Promise<void>}
+   */
+  async recordVerificationAttempt({ verificationCode, decision, serverPass, cryptoPass, bodyPass }) {
+    if (!prisma.verificationLog) return;
+
+    await prisma.verificationLog.create({
+      data: {
+        verificationCode: verificationCode || null,
+        decisionStatus: decision,
+        serverPass: !!serverPass,
+        cryptoPass: !!cryptoPass,
+        bodyPass: !!bodyPass,
+      },
+    });
   }
 }
 
