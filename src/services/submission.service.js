@@ -52,6 +52,10 @@ const buildSubmissionHistoryStatusFilter = ({ diterima, ditolak, rejectionStages
   return statusFilter;
 };
 
+const buildSubmissionNotificationData = (submissionId) => ({
+  submission_id: submissionId.toString(),
+});
+
 /**
  * Submission Service - Handles submission workflow business logic
  */
@@ -168,12 +172,10 @@ class SubmissionService {
 
     try {
       await sendToUser(activeKepling.userId, {
+        type: 'submission',
         title: 'Pengajuan Surat Baru',
         body: `Ada pengajuan ${letterType} baru dari ${user.nama} yang memerlukan persetujuan Anda.`,
-        data: {
-          submissionId: submission.id.toString(),
-          type: 'submission_created',
-        },
+        data: buildSubmissionNotificationData(submission.id),
       });
     } catch (error) {
       console.error('Failed to send notification to Kepling:', error);
@@ -868,34 +870,26 @@ class SubmissionService {
     });
 
     const activeLurahUserId = await this.getActiveLurahUserId();
-    const notificationData = {
-      submissionId: result.id.toString(),
-      letterType: result.type,
-      status: result.status,
-    };
+    const notificationData = buildSubmissionNotificationData(result.id);
 
     await Promise.all([
       this.sendSubmissionNotification(
         activeLurahUserId,
         {
+          type: 'submission',
           title: 'Pengajuan Menunggu Persetujuan Lurah',
           body: `Pengajuan ${result.type} dari ${result.user.nama} telah disetujui Kepling dan menunggu persetujuan Anda.`,
-          data: {
-            ...notificationData,
-            type: 'submission_approved_by_kepling_for_lurah',
-          },
+          data: notificationData,
         },
         'to Lurah after Kepling approval',
       ),
       this.sendSubmissionNotification(
         result.userId,
         {
+          type: 'submission',
           title: 'Pengajuan Disetujui Kepling',
           body: `Pengajuan ${result.type} Anda telah disetujui Kepling dan diteruskan ke Lurah.`,
-          data: {
-            ...notificationData,
-            type: 'submission_approved_by_kepling_for_warga',
-          },
+          data: notificationData,
         },
         'to Warga after Kepling approval',
       ),
@@ -993,14 +987,10 @@ class SubmissionService {
     await this.sendSubmissionNotification(
       result.userId,
       {
+        type: 'submission',
         title: 'Pengajuan Ditolak Kepling',
         body: `Pengajuan ${result.type} Anda ditolak oleh Kepling. Alasan: ${reason}`,
-        data: {
-          submissionId: result.id.toString(),
-          letterType: result.type,
-          status: result.status,
-          type: 'submission_rejected_by_kepling',
-        },
+        data: buildSubmissionNotificationData(result.id),
       },
       'to Warga after Kepling rejection',
     );
@@ -1058,16 +1048,10 @@ class SubmissionService {
     await this.sendSubmissionNotification(
       updatedSubmission.userId,
       {
+        type: 'submission',
         title: 'Pengajuan Disetujui Lurah',
         body: `Pengajuan ${updatedSubmission.type} Anda telah disetujui Lurah dan surat telah diterbitkan.`,
-        data: {
-          submissionId: updatedSubmission.id.toString(),
-          letterType: updatedSubmission.type,
-          status: updatedSubmission.status,
-          letterNumber: result.letterNumber,
-          verificationCode: result.verificationCode,
-          type: 'submission_approved_by_lurah',
-        },
+        data: buildSubmissionNotificationData(updatedSubmission.id),
       },
       'to Warga after Lurah approval',
     );
@@ -1152,14 +1136,10 @@ class SubmissionService {
     await this.sendSubmissionNotification(
       result.userId,
       {
+        type: 'submission',
         title: 'Pengajuan Ditolak Lurah',
         body: `Pengajuan ${result.type} Anda ditolak oleh Lurah. Alasan: ${reason}`,
-        data: {
-          submissionId: result.id.toString(),
-          letterType: result.type,
-          status: result.status,
-          type: 'submission_rejected_by_lurah',
-        },
+        data: buildSubmissionNotificationData(result.id),
       },
       'to Warga after Lurah rejection',
     );
