@@ -6,6 +6,7 @@ dotenv.config();
 
 const { default: app } = await import('./app.js');
 const { default: ensureAdmin } = await import('./scripts/ensureAdmin.js');
+const { default: signingService } = await import('./services/signing.service.js');
 
 const PORT = process.env.PORT || 3000;
 
@@ -19,3 +20,9 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT} (${process.env.NODE_ENV})`);
 });
+
+setInterval(() => {
+  signingService.cleanupExpiredSessions().catch((err) => {
+    console.error('Signing session cleanup failed:', err);
+  });
+}, 5 * 60 * 1000).unref?.();

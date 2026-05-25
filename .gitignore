@@ -5,6 +5,8 @@
 /src/generated/prisma
 /docs
 /public/letters/*
+/secure-storage
+/storage
 AGENTS.md
 /uploads
 serviceAccountKey.json

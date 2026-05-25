@@ -3,6 +3,7 @@ import { basename, dirname, extname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 import submissionService from '../services/submission.service.js';
+import signingService from '../services/signing.service.js';
 import loadSubmissionSchema from '../lib/schemaLoader.js';
 import { validateSubmission } from '../validators/submission.validator.js';
 import { formatSubmissionByUserResponse, formatSubmissionResponse } from '../utils/formatters.js';
@@ -577,28 +578,72 @@ class SubmissionController {
     }
   }
 
-  /**
-   * POST /submissions/:id/lurah/approve - Approve by lurah (triggers letter generation)
-   * Body: { passphrase, note?, keterangan? }
-   */
-  async approveByLurah(req, res, next) {
-    try {
-      const { id } = req.params;
-      const lurahUserId = req.user.userId;
-      const { passphrase, note, keterangan } = req.body;
+  async approveByLurah(req, res, _next) {
+    return res.status(410).json({
+      error: 'Gone',
+      message: 'Endpoint ini sudah tidak didukung. Gunakan /v1/submissions/:id/lurah/prepare-signing dan /submit-signature.',
+    });
+  }
 
-      // Passphrase is required to decrypt the Lurah's signing key
-      if (!passphrase) {
+  /**
+   * POST /submissions/:id/lurah/prepare-signing
+   * Renders PDF with PAdES placeholder and returns DER signedAttributes bytes.
+   */
+  async prepareSigning(req, res, next) {
+    try {
+      const result = await signingService.prepareSigning({
+        submissionId: req.params.id,
+        lurahUserId: req.user.userId,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: result.sessionId,
+          expiresAt: result.expiresAt,
+          pdfBase64: result.pdfBase64,
+          bytesToSignBase64: result.bytesToSignBase64,
+          preview: result.preview,
+        },
+      });
+    } catch (error) {
+      if (error.status) {
+        const labels = {
+          400: 'Bad Request',
+          403: 'Forbidden',
+          404: 'Not Found',
+          409: 'Conflict',
+          412: 'Precondition Failed',
+        };
+        return res.status(error.status).json({
+          error: labels[error.status] || 'Error',
+          message: error.message,
+          details: error.details || undefined,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * POST /submissions/:id/lurah/submit-signature
+   * Verifies mobile signature over bytesToSign and finalizes the PAdES PDF.
+   */
+  async submitSignature(req, res, next) {
+    try {
+      const { sessionId, signatureBase64, note, keterangan } = req.body || {};
+      if (!sessionId || !signatureBase64) {
         return res.status(400).json({
           error: 'Bad Request',
-          message: 'Passphrase wajib diisi untuk menandatangani surat',
+          message: 'sessionId dan signatureBase64 wajib diisi',
         });
       }
 
-      const { submission, letterResult } = await submissionService.approveByLurah({
-        submissionId: id,
-        lurahUserId,
-        passphrase,
+      const { submission, letter } = await signingService.submitSignature({
+        submissionId: req.params.id,
+        lurahUserId: req.user.userId,
+        sessionId,
+        signatureBase64,
         note,
         keterangan,
       });
@@ -608,44 +653,29 @@ class SubmissionController {
         data: {
           submission: this.formatSubmissionDetail(submission, req),
           letter: {
-            letter_number: letterResult.letterNumber,
-            verification_code: letterResult.verificationCode,
-            verification_url: letterResult.verificationUrl,
-            pdf_path: letterResult.pdfPath,
-            expires_at: letterResult.expiresAt,
+            issued_letter_id: letter.issuedLetterId,
+            letter_number: letter.letterNumber,
+            verification_code: letter.verificationCode,
+            verification_url: letter.verificationUrl,
+            pdf_path: letter.pdfPath,
+            signed_at: letter.signedAt,
+            expires_at: letter.expiresAt,
           },
         },
       });
     } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          error: 'Not Found',
+      if (error.status) {
+        const labels = {
+          400: 'Bad Request',
+          403: 'Forbidden',
+          404: 'Not Found',
+          409: 'Conflict',
+          410: 'Gone',
+        };
+        return res.status(error.status).json({
+          error: labels[error.status] || 'Error',
           message: error.message,
-        });
-      }
-      if (error.code === 'FORBIDDEN') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: error.message,
-        });
-      }
-      if (error.code === 'BAD_REQUEST') {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: error.message,
-        });
-      }
-      if (error.code === 'CONFLICT') {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: error.message,
-        });
-      }
-      // Handle crypto errors
-      if (error.message && error.message.includes('decrypt')) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Passphrase tidak valid',
+          details: error.details || undefined,
         });
       }
       next(error);

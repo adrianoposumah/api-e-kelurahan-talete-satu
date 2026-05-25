@@ -1,4 +1,6 @@
 import cryptoService from '../services/crypto.service.js';
+import enrollmentService from '../services/enrollment.service.js';
+import caService from '../services/ca.service.js';
 
 /**
  * Key Controller - Handles key management endpoints
@@ -8,55 +10,123 @@ class KeyController {
    * POST /keys/generate - Generate key pair for logged-in Lurah
    * Only Lurah can generate their own keys
    */
-  async generateKey(req, res, next) {
+  async generateKey(req, res, _next) {
+    return res.status(410).json({
+      error: 'Gone',
+      message: 'Endpoint ini sudah tidak didukung. Gunakan /v1/keys/enrollment-token dan /v1/keys/csr.',
+    });
+  }
+
+  /**
+   * POST /keys/enrollment-token - Request short-lived CSR enrollment token.
+   */
+  async requestEnrollmentToken(req, res, next) {
     try {
-      const lurahUserId = req.user.userId;
-      const { passphrase } = req.body;
+      const result = await enrollmentService.issueEnrollmentToken(req.user.userId);
+      res.json({
+        success: true,
+        data: {
+          enrollmentToken: result.enrollmentToken,
+          expiresAt: result.expiresAt,
+          subjectTemplate: result.subjectTemplate,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'ALREADY_ENROLLED') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+          data: error.details || null,
+        });
+      }
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({ error: 'Not Found', message: error.message });
+      }
+      next(error);
+    }
+  }
 
-      if (!passphrase) {
+  /**
+   * POST /keys/csr - Submit PKCS#10 CSR and receive Lurah certificate.
+   */
+  async submitCsr(req, res, next) {
+    try {
+      const { enrollmentToken, csrPem, deviceLabel } = req.body || {};
+      if (!enrollmentToken || !csrPem) {
         return res.status(400).json({
-          success: false,
-          message: 'Passphrase wajib diisi',
+          error: 'Bad Request',
+          message: 'enrollmentToken dan csrPem wajib diisi',
         });
       }
 
-      if (passphrase.length < 8) {
-        return res.status(400).json({
-          success: false,
-          message: 'Passphrase minimal 8 karakter',
-        });
-      }
-
-      const result = await cryptoService.generateLurahKey(lurahUserId, passphrase);
+      const result = await enrollmentService.submitCsr(req.user.userId, {
+        enrollmentToken,
+        csrPem,
+        deviceLabel,
+      });
 
       res.status(201).json({
         success: true,
-        message: 'Key pair berhasil dibuat',
+        message: 'Sertifikat berhasil diterbitkan',
         data: {
-          id: result.id,
-          publicKey: result.publicKey,
-          status: result.status,
-          createdAt: result.createdAt,
+          keyId: result.keyId,
+          certificatePem: result.certificatePem,
+          rootCaCertificatePem: result.rootCaCertificatePem,
+          serialNumber: result.serialNumber,
+          fingerprint: result.fingerprint,
+          algorithm: result.algorithm,
+          issuedAt: result.issuedAt,
+          expiresAt: result.expiresAt,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'ENROLLMENT_TOKEN_EXPIRED') {
+        return res.status(410).json({ error: 'Gone', message: error.message });
+      }
+      if (['INVALID_INPUT', 'INVALID_CSR', 'SUBJECT_MISMATCH'].includes(error.code)) {
+        return res.status(400).json({ error: 'Bad Request', message: error.message });
+      }
+      if (error.code === 'ALREADY_ENROLLED') {
+        return res.status(409).json({ error: 'Conflict', message: error.message });
+      }
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({ error: 'Not Found', message: error.message });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * GET /keys/certificate - Get current active Lurah certificate.
+   */
+  async getCertificate(req, res, next) {
+    try {
+      const keyRecord = await enrollmentService.getCertificate(req.user.userId);
+      if (!keyRecord) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Lurah belum melakukan enrollment',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          keyId: keyRecord.id.toString(),
+          certificatePem: keyRecord.certificatePem,
+          rootCaCertificatePem: caService.getRootCaPem(),
+          serialNumber: keyRecord.serialNumber,
+          fingerprint: keyRecord.fingerprint,
+          deviceLabel: keyRecord.deviceLabel,
+          algorithm: keyRecord.algorithm,
+          status: keyRecord.status,
+          issuedAt: keyRecord.enrolledAt,
+          expiresAt: keyRecord.expiresAt,
         },
       });
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          success: false,
-          message: error.message,
-        });
-      }
-      if (error.code === 'FORBIDDEN') {
-        return res.status(403).json({
-          success: false,
-          message: error.message,
-        });
-      }
-      if (error.code === 'BAD_REQUEST') {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
+        return res.status(404).json({ error: 'Not Found', message: error.message });
       }
       next(error);
     }
@@ -120,9 +190,15 @@ class KeyController {
         data: keys.map((k) => ({
           id: k.id.toString(),
           publicKey: k.publicKey,
+          certificatePem: k.certificatePem || null,
+          fingerprint: k.fingerprint || null,
+          serialNumber: k.serialNumber || null,
+          deviceLabel: k.deviceLabel || null,
           algorithm: k.algorithm,
           status: k.status,
           createdAt: k.createdAt,
+          enrolledAt: k.enrolledAt,
+          expiresAt: k.expiresAt,
           deactivatedAt: k.deactivatedAt,
           deactivateReason: k.deactivateReason,
           lurahProfile: k.lurahProfile,
@@ -152,8 +228,11 @@ class KeyController {
         data: {
           id: result.id.toString(),
           publicKey: result.publicKey,
+          certificatePem: result.certificatePem || null,
+          rootCaCertificatePem: result.certificatePem ? caService.getRootCaPem() : null,
           algorithm: result.algorithm,
           createdAt: result.createdAt,
+          expiresAt: result.expiresAt || null,
           signer: result.lurahProfile
             ? {
                 nama: result.lurahProfile.namaLengkap,
@@ -184,7 +263,10 @@ class KeyController {
           ? {
               algorithm: keyRecord.algorithm,
               status: keyRecord.status,
+              certificatePem: keyRecord.certificatePem || null,
+              fingerprint: keyRecord.fingerprint || null,
               created_at: keyRecord.createdAt,
+              expires_at: keyRecord.expiresAt || null,
             }
           : null,
       });
@@ -258,6 +340,8 @@ class KeyController {
         success: true,
         data: {
           public_key: keyRecord.publicKey,
+          certificatePem: keyRecord.certificatePem || null,
+          rootCaCertificatePem: keyRecord.certificatePem ? caService.getRootCaPem() : null,
           algorithm: keyRecord.algorithm,
           signer: {
             nama: keyRecord.lurahProfile.namaLengkap,
@@ -266,8 +350,6 @@ class KeyController {
           },
           letter: {
             letter_number: letter.letterNumber,
-            canonical_hash: letter.canonicalHash,
-            signature: letter.signature,
             issued_at: letter.issuedAt,
           },
         },

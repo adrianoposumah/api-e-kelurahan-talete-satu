@@ -234,6 +234,7 @@ model Submission {
   documents     SubmissionDocument[]
   approvals     SubmissionApproval[]
   issuedLetter  IssuedLetter?
+  signingSessions SigningSession[]
 
   @@map("submissions")
 }
@@ -290,6 +291,7 @@ model LurahProfile {
   // Relations
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   lurahKeys     LurahKey[]
+  signingSessions SigningSession[]
 
   @@index([userId])
   @@index([nip])
@@ -324,14 +326,29 @@ enum KeyStatus {
   INACTIVE
 }
 
+enum SigningSessionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  REJECTED
+}
+
 // Lurah key pairs for digital signatures
 model LurahKey {
   id                  BigInt        @id @default(autoincrement()) @db.BigInt
   lurahProfileId      BigInt        @map("lurah_profile_id") @db.BigInt
   publicKey           String        @map("public_key") @db.Text
-  encryptedPrivateKey String        @map("encrypted_private_key") @db.Text
+  encryptedPrivateKey String?       @map("encrypted_private_key") @db.Text
   algorithm           String        @default("RSA-SHA256") @db.VarChar(50)
   status              KeyStatus     @default(ACTIVE)
+
+  // v2.0 mobile-key / PAdES certificate metadata. Private keys are not stored for new keys.
+  certificatePem      String?       @map("certificate_pem") @db.Text
+  serialNumber        String?       @unique @map("serial_number") @db.VarChar(64)
+  fingerprint         String?       @unique @db.VarChar(128)
+  deviceLabel         String?       @map("device_label") @db.VarChar(255)
+  enrolledAt          DateTime?     @map("enrolled_at")
+  expiresAt           DateTime?     @map("expires_at")
 
   // Deactivation tracking
   deactivatedAt       DateTime?     @map("deactivated_at")
@@ -343,27 +360,55 @@ model LurahKey {
 
   // Relations
   lurahProfile        LurahProfile  @relation(fields: [lurahProfileId], references: [id], onDelete: Cascade)
+  signingSessions     SigningSession[]
+  issuedLetters       IssuedLetter[] @relation("IssuedLetterSignatureKey")
 
   @@index([status])
   @@index([lurahProfileId])
+  @@index([fingerprint])
   @@map("lurah_keys")
+}
+
+model SigningSession {
+  id                 BigInt               @id @default(autoincrement()) @db.BigInt
+  submissionId       BigInt               @map("submission_id") @db.BigInt
+  lurahProfileId     BigInt               @map("lurah_profile_id") @db.BigInt
+  keyId              BigInt               @map("key_id") @db.BigInt
+  bytesToSignBase64  String               @map("bytes_to_sign_base64") @db.Text
+  pdfDraftPath       String               @map("pdf_draft_path") @db.VarChar(255)
+  letterNumber       String               @map("letter_number") @db.VarChar(100)
+  verificationCode   String               @map("verification_code") @db.VarChar(50)
+  issuedDate         DateTime             @map("issued_date")
+  expiresAt          DateTime             @map("expires_at")
+  status             SigningSessionStatus @default(PENDING)
+  completedAt        DateTime?            @map("completed_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  submission         Submission           @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  lurahProfile       LurahProfile         @relation(fields: [lurahProfileId], references: [id], onDelete: Cascade)
+  lurahKey           LurahKey             @relation(fields: [keyId], references: [id])
+
+  @@index([submissionId])
+  @@index([keyId])
+  @@index([expiresAt, status])
+  @@map("signing_sessions")
 }
 
 // Issued letters - stores issued letter records
 model IssuedLetter {
   id              BigInt     @id @default(autoincrement()) @db.BigInt
+  publicId        String?    @unique @default(cuid()) @map("public_id")
   submissionId    BigInt     @unique @map("submission_id") @db.BigInt
   letterNumber    String     @unique @map("letter_number") @db.VarChar(100)
   verificationCode String    @unique @map("verification_code") @db.VarChar(50)
   type            SubmissionType
   keterangan      String?    @db.Text // Admin description/notes about the letter
   
-  // Letter content
-  canonicalData   String     @map("canonical_data") @db.Text
-  canonicalHash   String     @map("canonical_hash") @db.VarChar(64) // SHA256 hex
-  signature       String     @db.Text // Base64 encoded signature
+  // PAdES signing metadata
   signedBy        BigInt     @map("signed_by") @db.BigInt
   signatureKeyId  BigInt?    @map("signature_key_id") @db.BigInt
+  signedAt        DateTime?  @map("signed_at")
   
   // File paths
   pdfPath         String     @map("pdf_path") @db.VarChar(255)
@@ -380,6 +425,7 @@ model IssuedLetter {
 
   // Relations
   submission      Submission @relation(fields: [submissionId], references: [id])
+  signatureKey    LurahKey?  @relation("IssuedLetterSignatureKey", fields: [signatureKeyId], references: [id])
 
   @@index([signatureKeyId])
   @@map("issued_letters")

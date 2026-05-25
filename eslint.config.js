@@ -3,6 +3,9 @@ import globals from 'globals';
 
 export default [
   {
+    ignores: ['mobile-key-implementation/**'],
+  },
+  {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: globals.node,

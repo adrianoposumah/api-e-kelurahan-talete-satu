@@ -9,6 +9,11 @@ const env = {
   VERIFICATION_URL: process.env.VERIFICATION_URL,
   ADMIN_DASHBOARD_URL: process.env.ADMIN_DASHBOARD_URL,
   KELURAHAN_CODE: process.env.KELURAHAN_CODE || '2009',
+  ROOT_CA_CERT_PATH: process.env.ROOT_CA_CERT_PATH || 'secure-storage/root-ca-cert.pem',
+  ROOT_CA_KEY_PATH: process.env.ROOT_CA_KEY_PATH || 'secure-storage/root-ca-key.pem',
+  ROOT_CA_KEY_PASSPHRASE: process.env.ROOT_CA_KEY_PASSPHRASE,
+  PDF_STORAGE_DIR: process.env.PDF_STORAGE_DIR || 'public/letters',
+  PDF_DRAFT_DIR: process.env.PDF_DRAFT_DIR || 'storage/letter-drafts',
 };
 
 export default env;

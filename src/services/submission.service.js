@@ -1,5 +1,4 @@
 import prisma from '../config/prisma.js';
-import letterService from './letter.service.js';
 import { sendToUser } from './notification.service.js';
 
 const parseBigIntFilter = (value, fieldName) => {
@@ -996,70 +995,6 @@ class SubmissionService {
     );
 
     return result;
-  }
-
-  /**
-   * Approve submission by lurah — triggers the 7-phase letter generation pipeline.
-   * The Lurah provides a passphrase to decrypt their private key and sign the letter.
-   * @param {object} data - Approval data
-   * @returns {Promise<object>} Updated submission with issued letter
-   */
-  async approveByLurah({ submissionId, lurahUserId, passphrase, note, keterangan }) {
-    // Delegate to letter service which handles:
-    // - Validation (status must be pending_lurah)
-    // - Auto letter number generation
-    // - Template rendering → PDF generation
-    // - Canonical data → hash → RSA signing
-    // - XMP metadata embedding
-    // - PDF save to disk
-    // - DB transaction (approval record + issued letter + status → approved)
-    const result = await letterService.issueLetter({
-      submissionId,
-      lurahUserId,
-      passphrase,
-      note,
-      keterangan,
-    });
-
-    // Re-fetch the full submission for response formatting
-    const updatedSubmission = await prisma.submission.findUnique({
-      where: { id: BigInt(submissionId) },
-      include: {
-        user: {
-          include: { kependudukan: true },
-        },
-        lingkungan: {
-          include: {
-            keplings: {
-              where: { selesai: null },
-              include: { user: true },
-            },
-          },
-        },
-        documents: true,
-        approvals: {
-          include: { approver: true },
-          orderBy: { createdAt: 'asc' },
-        },
-        issuedLetter: true,
-      },
-    });
-
-    await this.sendSubmissionNotification(
-      updatedSubmission.userId,
-      {
-        type: 'submission',
-        title: 'Pengajuan Disetujui Lurah',
-        body: `Pengajuan ${updatedSubmission.type} Anda telah disetujui Lurah dan surat telah diterbitkan.`,
-        data: buildSubmissionNotificationData(updatedSubmission.id),
-      },
-      'to Warga after Lurah approval',
-    );
-
-    return {
-      submission: updatedSubmission,
-      letterResult: result,
-    };
   }
 
   /**

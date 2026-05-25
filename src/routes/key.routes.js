@@ -21,6 +21,15 @@ router.use(authMiddleware);
 // POST /keys/generate - Generate new key pair (Lurah only)
 router.post('/generate', requireRole('lurah'), keyController.generateKey.bind(keyController));
 
+// POST /keys/enrollment-token - Request CSR enrollment token (Lurah only)
+router.post('/enrollment-token', requireRole('lurah'), keyController.requestEnrollmentToken.bind(keyController));
+
+// POST /keys/csr - Submit CSR and receive X.509 certificate (Lurah only)
+router.post('/csr', requireRole('lurah'), keyController.submitCsr.bind(keyController));
+
+// GET /keys/certificate - Get current active certificate (Lurah only)
+router.get('/certificate', requireRole('lurah'), keyController.getCertificate.bind(keyController));
+
 // GET /keys/status - Check key status (Lurah only)
 router.get('/status', requireRole('lurah'), keyController.getKeyStatus.bind(keyController));
 

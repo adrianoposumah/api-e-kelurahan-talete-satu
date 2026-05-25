@@ -1,30 +1,19 @@
+import { basename, dirname, isAbsolute, relative, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 import prisma from '../config/prisma.js';
 import cryptoService from './crypto.service.js';
 import pdfService from './pdf.service.js';
-import { readFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import { basename, dirname, isAbsolute, relative, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import pkcs7Service from './pkcs7.service.js';
+import caService from './ca.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 const PUBLIC_LETTERS_DIR = resolve(PROJECT_ROOT, 'public', 'letters');
 
-/**
- * Verification Service - Hybrid verification for uploaded letter PDF files.
- *
- * Validation is split into three independent checks:
- * 1) Server-based check against DB records.
- * 2) Cryptographic check against stored public key.
- * 3) Body content check against signed body_hash.
- */
 class VerificationService {
-  /**
-   * Ensure a PDF path from the database resolves only to the public letters folder.
-   * @param {string} filePath - Stored PDF path
-   * @returns {{ absolutePath: string, publicPath: string }}
-   */
   resolvePublicLetterPath(filePath) {
     const storedPath = String(filePath || '');
     const isDriveAbsolutePath = /^[a-zA-Z]:[\\/]/.test(storedPath) || storedPath.startsWith('\\\\');
@@ -44,21 +33,13 @@ class VerificationService {
     };
   }
 
-  /**
-   * Read the generated PDF stored for an issued letter.
-   * @param {object} issuedLetter - Issued letter DB record
-   * @returns {Promise<{ buffer: Buffer, publicPath: string, filename: string }>}
-   */
   async readStoredPdf(issuedLetter) {
     const candidatePaths = [issuedLetter.pdfPath, pdfService.getPdfPath(issuedLetter.verificationCode)].filter(Boolean);
     const seen = new Set();
 
     for (const candidatePath of candidatePaths) {
       const pdfPath = this.resolvePublicLetterPath(candidatePath);
-
-      if (seen.has(pdfPath.absolutePath)) {
-        continue;
-      }
+      if (seen.has(pdfPath.absolutePath)) continue;
       seen.add(pdfPath.absolutePath);
 
       if (existsSync(pdfPath.absolutePath)) {
@@ -75,395 +56,143 @@ class VerificationService {
     throw error;
   }
 
-  /**
-   * Extract and validate required signature metadata from a PDF.
-   * @param {Buffer} pdfBuffer - Uploaded PDF buffer
-   * @returns {Promise<object>} Metadata fields
-   */
-  async extractMetadata(pdfBuffer) {
-    const metadata = await pdfService.readSignatureMetadata(pdfBuffer);
-
-    if (!metadata) {
-      throw new Error('No signature metadata found in this file');
-    }
-
-    if (!metadata.verificationCode) {
-      throw new Error('Incomplete metadata: verification code is missing');
-    }
-
-    if (!metadata.signatureValue) {
-      throw new Error('Incomplete metadata: signature is missing');
-    }
-
-    return metadata;
+  hasPadesSignature(pdfBuffer) {
+    const text = Buffer.from(pdfBuffer).toString('latin1');
+    return text.includes('/ByteRange') && text.includes('/SubFilter /ETSI.CAdES.detached');
   }
 
-  /**
-   * Run server-based check against issued letter records.
-   * @param {object} metadata - Extracted PDF metadata
-   * @returns {Promise<object>} Server check result with issued letter record
-   */
-  async runServerCheck(metadata) {
-    const issuedLetter = await prisma.issuedLetter.findUnique({
-      where: { verificationCode: metadata.verificationCode },
-      include: {
-        submission: true,
-      },
-    });
-
-    if (!issuedLetter) {
-      return {
-        pass: false,
-        status: 'not_found',
-        reason: 'Letter code not found in records',
-        issuedLetter: null,
-      };
-    }
-
-    if (!['approved', 'issued'].includes(issuedLetter.submission.status)) {
-      return {
-        pass: false,
-        status: 'not_approved',
-        reason: 'Letter was not approved through the system',
-        issuedLetter,
-      };
-    }
-
-    if (issuedLetter.isRevoked) {
-      return {
-        pass: false,
-        status: 'revoked',
-        reason: `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`,
-        issuedLetter,
-      };
-    }
-
-    if (issuedLetter.expiresAt && new Date() > issuedLetter.expiresAt) {
-      return {
-        pass: false,
-        status: 'expired',
-        reason: `Letter expired on ${issuedLetter.expiresAt.toISOString()}`,
-        issuedLetter,
-      };
-    }
-
-    if (metadata.signatureValue !== issuedLetter.signature) {
-      return {
-        pass: false,
-        status: 'mismatch',
-        reason: 'Signature does not match records',
-        issuedLetter,
-      };
-    }
-
-    if (metadata.canonicalHash && metadata.canonicalHash !== issuedLetter.canonicalHash) {
-      return {
-        pass: false,
-        status: 'mismatch',
-        reason: 'Canonical hash does not match records',
-        issuedLetter,
-      };
-    }
-
-    if (metadata.canonicalPayload) {
-      let decodedCanonicalPayload;
-
-      try {
-        decodedCanonicalPayload = Buffer.from(metadata.canonicalPayload, 'base64').toString('utf8');
-      } catch {
-        return {
-          pass: false,
-          status: 'malformed_metadata',
-          reason: 'Canonical payload in metadata is malformed',
-          issuedLetter,
-        };
-      }
-
-      if (decodedCanonicalPayload !== issuedLetter.canonicalData) {
-        return {
-          pass: false,
-          status: 'mismatch',
-          reason: 'Canonical payload does not match records',
-          issuedLetter,
-        };
-      }
-    }
-
-    if (metadata.signatureKeyId && issuedLetter.signatureKeyId && metadata.signatureKeyId !== issuedLetter.signatureKeyId.toString()) {
-      return {
-        pass: false,
-        status: 'mismatch',
-        reason: 'Signing key does not match records',
-        issuedLetter,
-      };
-    }
-
-    if (metadata.letterNumber && metadata.letterNumber !== issuedLetter.letterNumber) {
-      return {
-        pass: false,
-        status: 'mismatch',
-        reason: 'Letter number does not match records',
-        issuedLetter,
-      };
-    }
-
-    return {
-      pass: true,
-      status: 'pass',
-      reason: 'Letter found in records with approved status',
-      issuedLetter,
-    };
+  trimPaddedSignatureHex(contentsHex) {
+    let trimmed = String(contentsHex || '').replace(/[^0-9a-f]/gi, '').replace(/0+$/g, '');
+    if (trimmed.length % 2 !== 0) trimmed += '0';
+    return trimmed;
   }
 
-  /**
-   * Decode canonical payload embedded in PDF metadata.
-   * @param {object} metadata - Extracted metadata
-   * @returns {string|null} Canonical JSON string or null
-   */
-  decodeCanonicalPayload(metadata) {
-    if (!metadata.canonicalPayload) {
-      return null;
-    }
-
+  async extractVerificationCodeFromPdf(pdfBuffer) {
     try {
-      return Buffer.from(metadata.canonicalPayload, 'base64').toString('utf8');
+      const text = await pdfService.extractText(pdfBuffer);
+      return text.match(/[A-F0-9]{8}-\d{3}/i)?.[0]?.toUpperCase() || null;
     } catch {
       return null;
     }
   }
 
-  /**
-   * Resolve key record used to verify a letter signature.
-   * @param {object} metadata - Extracted metadata
-   * @param {object|null} issuedLetter - Issued letter DB record
-   * @returns {Promise<object|null>} Key record or null
-   */
-  async resolveKey(metadata, issuedLetter) {
-    if (metadata.signatureKeyId) {
-      try {
-        return await prisma.lurahKey.findUnique({ where: { id: BigInt(metadata.signatureKeyId) } });
-      } catch {
-        return null;
-      }
+  async runServerCheck(verificationCode) {
+    if (!verificationCode) {
+      return {
+        pass: false,
+        status: 'not_found',
+        reason: 'Verification code tidak ditemukan di PDF',
+        issuedLetter: null,
+      };
     }
 
-    if (issuedLetter?.signatureKeyId) {
-      return prisma.lurahKey.findUnique({ where: { id: issuedLetter.signatureKeyId } });
-    }
+    const issuedLetter = await prisma.issuedLetter.findUnique({
+      where: { verificationCode },
+      include: {
+        submission: true,
+        signatureKey: true,
+      },
+    });
 
     if (!issuedLetter) {
-      return null;
+      return { pass: false, status: 'not_found', reason: 'Letter code not found in records', issuedLetter: null };
+    }
+    if (issuedLetter.isRevoked) {
+      return { pass: false, status: 'revoked', reason: `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`, issuedLetter };
+    }
+    if (issuedLetter.expiresAt && new Date() > issuedLetter.expiresAt) {
+      return { pass: false, status: 'expired', reason: `Letter expired on ${issuedLetter.expiresAt.toISOString()}`, issuedLetter };
     }
 
-    return prisma.lurahKey.findFirst({
-      where: { lurahProfileId: issuedLetter.signedBy },
-      orderBy: { createdAt: 'desc' },
-    });
+    return { pass: true, status: 'pass', reason: 'Letter found in records', issuedLetter };
   }
 
-  /**
-   * Run cryptography-based signature verification.
-   * @param {object} metadata - Extracted PDF metadata
-   * @param {object|null} issuedLetter - Server-validated issued letter
-   * @returns {Promise<object>} Crypto check result
-   */
-  async runCryptoCheck(metadata, issuedLetter) {
-    const canonicalData = issuedLetter?.canonicalData || this.decodeCanonicalPayload(metadata);
+  async runPadesCheck(pdfBuffer, issuedLetter) {
+    try {
+      const { byteRange, contentsHex } = pdfService.extractByteRange(pdfBuffer);
+      const pkcs7 = pkcs7Service.parsePkcs7FromHex(this.trimPaddedSignatureHex(contentsHex));
+      const computedHash = pdfService.computeByteRangeHash(pdfBuffer, byteRange);
 
-    if (!canonicalData) {
-      return {
-        pass: false,
-        reason: 'Canonical payload is not available for cryptographic verification',
-        keyStatus: null,
-      };
-    }
+      if (!computedHash.equals(pkcs7.messageDigest)) {
+        return { pass: false, status: 'content_modified', reason: 'PDF ByteRange hash tidak cocok dengan messageDigest', signerCommonName: pkcs7.signerCommonName || null };
+      }
 
-    const keyRecord = await this.resolveKey(metadata, issuedLetter);
+      const signatureValid = cryptoService.verifySignatureWithCertificate(pkcs7.signedAttributesDer, pkcs7.signatureBytes, pkcs7.signerCertPem);
+      if (!signatureValid) {
+        return { pass: false, status: 'signature_invalid', reason: 'PKCS#7 signature tidak valid', signerCommonName: pkcs7.signerCommonName || null };
+      }
 
-    if (!keyRecord) {
-      return {
-        pass: false,
-        reason: 'Signing key not found',
-        keyStatus: null,
-      };
-    }
+      const chainValid = cryptoService.verifyCertChain(pkcs7.signerCertPem, caService.getRootCaPem());
+      if (!chainValid) {
+        return { pass: false, status: 'untrusted', reason: 'Sertifikat penanda tangan tidak dipercaya', signerCommonName: pkcs7.signerCommonName || null };
+      }
 
-    const isValid = cryptoService.verifyLetterSignature(canonicalData, metadata.signatureValue, keyRecord.publicKey);
+      if (issuedLetter?.signatureKey?.fingerprint) {
+        const fingerprint = cryptoService.computeCertFingerprint(pkcs7.signerCertPem);
+        if (fingerprint !== issuedLetter.signatureKey.fingerprint) {
+          return { pass: false, status: 'signer_mismatch', reason: 'Signer certificate tidak cocok dengan rekaman server', signerCommonName: pkcs7.signerCommonName || null };
+        }
+      }
 
-    if (!isValid) {
-      return {
-        pass: false,
-        reason: 'Digital signature is invalid — document may have been tampered with',
-        keyStatus: keyRecord.status,
-      };
-    }
+      if (!issuedLetter?.signatureKey) {
+        return { pass: false, status: 'missing_key_record', reason: 'Rekaman key penanda tangan tidak ditemukan', signerCommonName: pkcs7.signerCommonName || null };
+      }
+      if (issuedLetter.signatureKey.status !== 'ACTIVE') {
+        return { pass: false, status: 'revoked_key', reason: `Key penanda tangan berstatus ${issuedLetter.signatureKey.status}`, signerCommonName: pkcs7.signerCommonName || null };
+      }
+      if (issuedLetter.signatureKey.expiresAt && new Date() > issuedLetter.signatureKey.expiresAt) {
+        return { pass: false, status: 'expired_key', reason: `Sertifikat penanda tangan expired pada ${issuedLetter.signatureKey.expiresAt.toISOString()}`, signerCommonName: pkcs7.signerCommonName || null };
+      }
 
-    const reason = keyRecord.status === 'REVOKED' ? 'Digital signature is mathematically valid (key has been revoked)' : 'Digital signature is valid';
-
-    return {
-      pass: true,
-      reason,
-      keyStatus: keyRecord.status,
-    };
-  }
-
-  /**
-   * Run body integrity verification against the signed canonical body_hash.
-   * Legacy v1.0 letters do not have body_hash and are skipped for compatibility.
-   * @param {Buffer} pdfBuffer - Uploaded PDF bytes
-   * @param {object} metadata - Extracted PDF metadata
-   * @param {object|null} issuedLetter - Server-side issued letter record
-   * @returns {Promise<object>} Body check result
-   */
-  async runBodyCheck(pdfBuffer, metadata, issuedLetter) {
-    const canonicalData = issuedLetter?.canonicalData || this.decodeCanonicalPayload(metadata);
-
-    if (!canonicalData) {
-      return {
-        pass: false,
-        reason: 'Canonical data unavailable for body integrity check',
-      };
-    }
-
-    const expectedBodyHash = cryptoService.extractBodyHashFromCanonical(canonicalData);
-
-    if (!expectedBodyHash) {
       return {
         pass: true,
-        skipped: true,
-        reason: 'Letter signed without body hash (pre-v1.1) — body integrity not verifiable',
+        status: 'pass',
+        reason: 'PAdES signature valid',
+        signerCommonName: pkcs7.signerCommonName || null,
       };
-    }
-
-    let actualBodyHash;
-    try {
-      actualBodyHash = await pdfService.computeContentHash(pdfBuffer);
     } catch (error) {
-      return {
-        pass: false,
-        reason: `Failed to extract PDF text content: ${error.message}`,
-      };
+      return { pass: false, status: 'parse_error', reason: error.message, signerCommonName: null };
     }
-
-    if (actualBodyHash !== expectedBodyHash) {
-      return {
-        pass: false,
-        reason: 'PDF body content has been modified after signing',
-        expectedBodyHash,
-        actualBodyHash,
-      };
-    }
-
-    return {
-      pass: true,
-      reason: 'PDF body content matches signed hash',
-      expectedBodyHash,
-      actualBodyHash,
-    };
   }
 
-  /**
-   * Combine server, crypto, and body checks into the public verification decision.
-   * @param {object} serverResult - Server-side check result
-   * @param {object} cryptoResult - Cryptographic check result
-   * @param {object} bodyResult - Body content check result
-   * @returns {{ valid: boolean, status: string, message: string }}
-   */
-  decideVerificationResult(serverResult, cryptoResult, bodyResult) {
-    const serverStatus = serverResult.status;
-    const cryptoPass = cryptoResult.pass;
-    const bodyPass = bodyResult.pass;
-
-    if (serverStatus === 'not_found') {
-      if (cryptoPass && bodyPass) {
-        return { valid: false, status: 'NOT_REGISTERED', message: 'Surat tidak terdaftar di sistem' };
-      }
-      return { valid: false, status: 'FAKE', message: 'Surat palsu' };
-    }
-
-    if (serverStatus === 'malformed_metadata' || serverStatus === 'metadata_error') {
-      return { valid: false, status: 'MALFORMED', message: 'Metadata surat tidak valid' };
-    }
-
-    if (serverStatus === 'not_approved') {
-      return { valid: false, status: 'NOT_APPROVED', message: 'Surat belum disahkan' };
-    }
-
-    if (serverStatus === 'mismatch') {
-      if (cryptoPass) {
-        return { valid: false, status: 'RECORD_MISMATCH', message: 'Data surat tidak cocok dengan rekaman server' };
-      }
-      return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
-    }
-
-    if (serverStatus === 'revoked') {
-      if (cryptoPass && bodyPass) {
-        return { valid: false, status: 'REVOKED', message: 'Surat telah dicabut' };
-      }
-      return { valid: false, status: 'REVOKED_AND_MODIFIED', message: 'Surat telah dicabut dan dimodifikasi' };
-    }
-
-    if (serverStatus === 'expired') {
-      if (cryptoPass && bodyPass) {
-        return { valid: false, status: 'EXPIRED', message: 'Surat sudah kadaluarsa' };
-      }
-      return { valid: false, status: 'EXPIRED_AND_MODIFIED', message: 'Surat sudah kadaluarsa dan dimodifikasi' };
-    }
-
-    if (serverStatus === 'pass') {
-      if (cryptoPass && bodyPass) return { valid: true, status: 'VALID', message: 'Surat valid' };
-      if (!cryptoPass && !bodyPass) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
-      if (!cryptoPass) return { valid: false, status: 'CANONICAL_MODIFIED', message: 'Data tanda tangan dimodifikasi' };
-      if (!bodyPass) return { valid: false, status: 'BODY_MODIFIED', message: 'Isi surat dimodifikasi' };
-    }
-
-    return { valid: false, status: 'INVALID', message: 'Surat tidak valid' };
+  decideResult(serverResult, padesResult) {
+    if (serverResult.status === 'pass' && padesResult.pass) return { valid: true, status: 'VALID', message: 'Surat valid' };
+    if (serverResult.status === 'revoked' && padesResult.pass) return { valid: false, status: 'REVOKED', message: 'Surat telah dicabut' };
+    if (serverResult.status === 'expired' && padesResult.pass) return { valid: false, status: 'EXPIRED', message: 'Surat sudah kadaluarsa' };
+    if (serverResult.status === 'not_found' && padesResult.pass) return { valid: false, status: 'UNREGISTERED_BUT_VALID_SIGNATURE', message: 'Signature valid tetapi surat tidak terdaftar' };
+    if (serverResult.status === 'pass' && padesResult.status === 'untrusted') return { valid: false, status: 'UNTRUSTED_SIGNER', message: 'Sertifikat penanda tangan tidak dipercaya' };
+    if (serverResult.status === 'pass' && padesResult.status === 'revoked_key') return { valid: false, status: 'REVOKED_SIGNER', message: 'Key penanda tangan sudah dicabut atau tidak aktif' };
+    if (serverResult.status === 'pass' && padesResult.status === 'expired_key') return { valid: false, status: 'EXPIRED_SIGNER', message: 'Sertifikat penanda tangan sudah expired' };
+    if (serverResult.status === 'pass' && ['content_modified', 'signature_invalid', 'signer_mismatch'].includes(padesResult.status)) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
+    if (serverResult.status === 'pass' && padesResult.status === 'parse_error') return { valid: false, status: 'MALFORMED', message: 'Signature PAdES tidak dapat dibaca' };
+    return { valid: false, status: 'FAKE', message: 'Surat palsu' };
   }
 
-  /**
-   * Verify uploaded letter PDF with hybrid verification.
-   * @param {Buffer} pdfBuffer - Uploaded PDF bytes
-   * @returns {Promise<object>} Hybrid verification result payload
-   */
   async verifyLetter(pdfBuffer) {
-    let metadata;
-
-    try {
-      metadata = await this.extractMetadata(pdfBuffer);
-    } catch (error) {
+    if (!this.hasPadesSignature(pdfBuffer)) {
       return {
         valid: false,
         status: 'MALFORMED',
-        message: 'Metadata surat tidak valid',
-        serverCheck: {
-          pass: false,
-          status: 'metadata_error',
-          reason: error.message,
-        },
-        cryptoCheck: {
-          pass: false,
-          reason: 'Cannot verify without metadata',
-          keyStatus: null,
-        },
-        bodyCheck: {
-          pass: false,
-          reason: 'Cannot verify body without metadata',
-        },
+        message: 'PDF tidak memiliki signature PAdES',
+        serverCheck: { pass: false, status: 'missing_pades', reason: 'Missing /ByteRange or ETSI.CAdES.detached signature' },
+        cryptoCheck: { pass: false, reason: 'Cannot verify without PAdES signature', keyStatus: null },
+        bodyCheck: { pass: false, reason: 'Cannot verify ByteRange without PAdES signature', skipped: false },
+        trustCheck: { pass: false, reason: 'Cannot verify cert chain without PAdES signature', signerCommonName: null },
         letter: null,
       };
     }
 
-    const serverResult = await this.runServerCheck(metadata);
-    const cryptoResult = await this.runCryptoCheck(metadata, serverResult.issuedLetter);
-    const bodyResult = await this.runBodyCheck(pdfBuffer, metadata, serverResult.issuedLetter);
-    const decision = this.decideVerificationResult(serverResult, cryptoResult, bodyResult);
+    const verificationCode = await this.extractVerificationCodeFromPdf(pdfBuffer);
+    const serverResult = await this.runServerCheck(verificationCode);
+    const padesResult = await this.runPadesCheck(pdfBuffer, serverResult.issuedLetter);
+    const decision = this.decideResult(serverResult, padesResult);
 
     this.recordVerificationAttempt({
-      verificationCode: metadata.verificationCode,
+      verificationCode,
       decision: decision.status,
       serverPass: serverResult.pass,
-      cryptoPass: cryptoResult.pass,
-      bodyPass: bodyResult.pass,
+      cryptoPass: padesResult.pass,
+      bodyPass: padesResult.pass,
     }).catch(() => {});
 
     return {
@@ -476,16 +205,21 @@ class VerificationService {
         reason: serverResult.reason,
       },
       cryptoCheck: {
-        pass: cryptoResult.pass,
-        reason: cryptoResult.reason,
-        keyStatus: cryptoResult.keyStatus,
+        pass: padesResult.pass,
+        reason: padesResult.reason,
+        keyStatus: serverResult.issuedLetter?.signatureKey?.status || null,
       },
       bodyCheck: {
-        pass: bodyResult.pass,
-        reason: bodyResult.reason,
-        skipped: bodyResult.skipped || false,
+        pass: padesResult.pass,
+        reason: padesResult.reason,
+        skipped: false,
       },
-      letter: decision.valid
+      trustCheck: {
+        pass: padesResult.pass && padesResult.status === 'pass',
+        reason: padesResult.status === 'pass' ? 'Cert chain terverifikasi ke Root CA' : padesResult.reason,
+        signerCommonName: padesResult.signerCommonName || null,
+      },
+      letter: serverResult.issuedLetter
         ? {
             letterNumber: serverResult.issuedLetter.letterNumber,
             letterType: serverResult.issuedLetter.type,
@@ -496,15 +230,8 @@ class VerificationService {
     };
   }
 
-  /**
-   * Verify a generated PDF by verification code.
-   * The server loads the stored PDF and runs the same hybrid verification pipeline.
-   * @param {string} verificationCode - Public verification code
-   * @returns {Promise<object>} Hybrid verification result payload with PDF preview data
-   */
   async verifyLetterByCode(verificationCode) {
     const normalizedCode = String(verificationCode || '').trim();
-
     if (!normalizedCode) {
       const error = new Error('Verification code is required');
       error.code = 'BAD_REQUEST';
@@ -540,12 +267,6 @@ class VerificationService {
     };
   }
 
-  /**
-   * Record a verification attempt for audit and forensics.
-   * This is best-effort and remains a no-op until the optional Prisma model exists.
-   * @param {object} params - Audit log parameters
-   * @returns {Promise<void>}
-   */
   async recordVerificationAttempt({ verificationCode, decision, serverPass, cryptoPass, bodyPass }) {
     if (!prisma.verificationLog) return;
 

@@ -64,6 +64,12 @@ router.get('/admin/:id', requireRole('admin'), submissionController.getSubmissio
 // GET /submissions/:id - Get submission by ID (owner, kepling of lingkungan, lurah, admin)
 router.get('/:id', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), submissionController.getSubmissionById.bind(submissionController));
 
+// POST /submissions/:id/lurah/prepare-signing - Prepare PAdES signing session
+router.post('/:id/lurah/prepare-signing', requireRole('lurah'), submissionController.prepareSigning.bind(submissionController));
+
+// POST /submissions/:id/lurah/submit-signature - Submit mobile signature and finalize PAdES PDF
+router.post('/:id/lurah/submit-signature', requireRole('lurah'), submissionController.submitSignature.bind(submissionController));
+
 // POST /submissions/:id/lurah/approve - Approve by lurah
 router.post('/:id/lurah/approve', requireRole('lurah', 'sekertaris'), submissionController.approveByLurah.bind(submissionController));
 
