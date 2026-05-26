@@ -7,7 +7,8 @@ import { writeFile, mkdir, readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
-import { PDFParse } from 'pdf-parse';
+import jsQR from 'jsqr';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -126,18 +127,36 @@ class PdfService {
   }
 
   /**
-   * Extract visible text from a PDF buffer using pdf-parse v2.
+   * Rasterize each page of a PDF and attempt to decode an embedded QR code.
+   * Returns the decoded payload (typically a verification URL) or null when
+   * no QR can be read. Used as the primary fallback channel for hybrid
+   * verification when the PKCS#7 signature is missing or malformed.
+   *
    * @param {Buffer|Uint8Array} pdfBuffer - PDF bytes
-   * @returns {Promise<string>} Extracted text
+   * @param {object} [options]
+   * @param {number} [options.scale=2] - Render scale; higher = more reliable decode but slower
+   * @param {number} [options.maxPages=3] - Hard cap on pages scanned
+   * @returns {Promise<string|null>} Decoded QR payload, or null
    */
-  async extractText(pdfBuffer) {
-    const parser = new PDFParse({ data: Buffer.from(pdfBuffer) });
-
+  async extractQRCodeFromPdf(pdfBuffer, { scale = 2, maxPages = 3 } = {}) {
     try {
-      const data = await parser.getText();
-      return data.text || '';
-    } finally {
-      await parser.destroy();
+      const { pdf } = await import('pdf-to-img');
+      const document = await pdf(Buffer.from(pdfBuffer), { scale });
+
+      let pagesScanned = 0;
+      for await (const pageImage of document) {
+        if (pagesScanned >= maxPages) break;
+        pagesScanned += 1;
+
+        const { data, info } = await sharp(pageImage).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const decoded = jsQR(new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength), info.width, info.height);
+        if (decoded?.data) {
+          return decoded.data;
+        }
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 

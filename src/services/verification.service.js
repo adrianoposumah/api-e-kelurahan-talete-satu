@@ -67,13 +67,25 @@ class VerificationService {
     return trimmed;
   }
 
+  matchVerificationCode(payload) {
+    return String(payload || '').match(/[A-F0-9]{8}-\d{3}/i)?.[0]?.toUpperCase() || null;
+  }
+
+  /**
+   * Extract verification code from a PDF by decoding the embedded QR code.
+   * The QR remains parseable even when the PAdES signature is stripped or
+   * the visible text is altered — this is the channel that lets the server
+   * branch of hybrid verification still return a verdict for QR-transplant
+   * forgeries. When QR decoding fails, callers can still verify by passing
+   * the code directly to verifyLetterByCode().
+   *
+   * @param {Buffer|Uint8Array} pdfBuffer - PDF bytes
+   * @returns {Promise<{ code: string|null, source: 'qr'|null }>}
+   */
   async extractVerificationCodeFromPdf(pdfBuffer) {
-    try {
-      const text = await pdfService.extractText(pdfBuffer);
-      return text.match(/[A-F0-9]{8}-\d{3}/i)?.[0]?.toUpperCase() || null;
-    } catch {
-      return null;
-    }
+    const qrPayload = await pdfService.extractQRCodeFromPdf(pdfBuffer);
+    const fromQr = this.matchVerificationCode(qrPayload);
+    return fromQr ? { code: fromQr, source: 'qr' } : { code: null, source: null };
   }
 
   async runServerCheck(verificationCode) {
@@ -174,28 +186,32 @@ class VerificationService {
     if (serverResult.status === 'pass' && padesResult.status === 'untrusted') return { valid: false, status: 'UNTRUSTED_SIGNER', message: 'Sertifikat penanda tangan tidak dipercaya' };
     if (serverResult.status === 'pass' && padesResult.status === 'revoked_key') return { valid: false, status: 'REVOKED_SIGNER', message: 'Key penanda tangan sudah dicabut atau tidak aktif' };
     if (serverResult.status === 'pass' && padesResult.status === 'expired_key') return { valid: false, status: 'EXPIRED_SIGNER', message: 'Sertifikat penanda tangan sudah expired' };
+    if (serverResult.status === 'pass' && padesResult.status === 'missing_pades') {
+      return {
+        valid: false,
+        status: 'TAMPERED_QR_TRANSPLANT',
+        message: 'Kode verifikasi terdaftar tetapi dokumen tidak memiliki signature digital. Kemungkinan QR disalin dari surat lain.',
+      };
+    }
     if (serverResult.status === 'pass' && ['content_modified', 'signature_invalid', 'signer_mismatch'].includes(padesResult.status)) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
     if (serverResult.status === 'pass' && padesResult.status === 'parse_error') return { valid: false, status: 'MALFORMED', message: 'Signature PAdES tidak dapat dibaca' };
+    if (serverResult.status === 'not_found' && padesResult.status === 'missing_pades') return { valid: false, status: 'FAKE', message: 'Surat palsu' };
     return { valid: false, status: 'FAKE', message: 'Surat palsu' };
   }
 
   async verifyLetter(pdfBuffer) {
-    if (!this.hasPadesSignature(pdfBuffer)) {
-      return {
-        valid: false,
-        status: 'MALFORMED',
-        message: 'PDF tidak memiliki signature PAdES',
-        serverCheck: { pass: false, status: 'missing_pades', reason: 'Missing /ByteRange or ETSI.CAdES.detached signature' },
-        cryptoCheck: { pass: false, reason: 'Cannot verify without PAdES signature', keyStatus: null },
-        bodyCheck: { pass: false, reason: 'Cannot verify ByteRange without PAdES signature', skipped: false },
-        trustCheck: { pass: false, reason: 'Cannot verify cert chain without PAdES signature', signerCommonName: null },
-        letter: null,
-      };
-    }
-
-    const verificationCode = await this.extractVerificationCodeFromPdf(pdfBuffer);
+    const { code: verificationCode, source: codeSource } = await this.extractVerificationCodeFromPdf(pdfBuffer);
     const serverResult = await this.runServerCheck(verificationCode);
-    const padesResult = await this.runPadesCheck(pdfBuffer, serverResult.issuedLetter);
+
+    const padesResult = this.hasPadesSignature(pdfBuffer)
+      ? await this.runPadesCheck(pdfBuffer, serverResult.issuedLetter)
+      : {
+          pass: false,
+          status: 'missing_pades',
+          reason: 'PDF tidak memiliki signature PAdES (/ByteRange atau ETSI.CAdES.detached tidak ditemukan)',
+          signerCommonName: null,
+        };
+
     const decision = this.decideResult(serverResult, padesResult);
 
     this.recordVerificationAttempt({
@@ -214,6 +230,7 @@ class VerificationService {
         pass: serverResult.pass,
         status: serverResult.status,
         reason: serverResult.reason,
+        codeSource,
       },
       cryptoCheck: {
         pass: padesResult.pass,
@@ -223,7 +240,7 @@ class VerificationService {
       bodyCheck: {
         pass: padesResult.pass,
         reason: padesResult.reason,
-        skipped: false,
+        skipped: padesResult.status === 'missing_pades',
       },
       trustCheck: {
         pass: padesResult.pass && padesResult.status === 'pass',
