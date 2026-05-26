@@ -53,10 +53,13 @@ class EnrollmentService {
     });
   }
 
-  async issueEnrollmentToken(lurahUserId) {
+  async issueEnrollmentToken(lurahUserId, { allowExistingActiveKey = false, requireExistingActiveKey = false, purpose = 'ENROLLMENT' } = {}) {
     await this.getActiveLurahProfile(lurahUserId);
     const existing = await this.getActiveCertificateKey(lurahUserId);
-    if (existing) {
+    if (requireExistingActiveKey && !existing) {
+      throw createError('ENROLLMENT_REQUIRED', 'Lurah belum memiliki sertifikat aktif untuk dirotasi');
+    }
+    if (existing && !allowExistingActiveKey) {
       throw createError('ALREADY_ENROLLED', 'Lurah sudah memiliki sertifikat aktif. Lakukan revoke atau rotate dulu.', {
         activeKeyId: existing.id.toString(),
         issuedAt: existing.enrolledAt,
@@ -69,6 +72,7 @@ class EnrollmentService {
       lurahUserId: BigInt(lurahUserId).toString(),
       expiresAtMs: expiresAt.getTime(),
       used: false,
+      purpose,
     });
 
     return {
@@ -78,7 +82,7 @@ class EnrollmentService {
     };
   }
 
-  validateToken(lurahUserId, token) {
+  validateToken(lurahUserId, token, { purpose = 'ENROLLMENT' } = {}) {
     const entry = enrollmentTokens.get(token);
     if (!entry || entry.used) {
       throw createError('INVALID_INPUT', 'Enrollment token tidak valid');
@@ -90,6 +94,9 @@ class EnrollmentService {
     if (entry.lurahUserId !== BigInt(lurahUserId).toString()) {
       throw createError('INVALID_INPUT', 'Enrollment token tidak cocok dengan user');
     }
+    if (entry.purpose !== purpose) {
+      throw createError('INVALID_INPUT', 'Enrollment token tidak cocok dengan operasi yang diminta');
+    }
     return entry;
   }
 
@@ -100,7 +107,7 @@ class EnrollmentService {
       throw createError('ALREADY_ENROLLED', 'Lurah sudah memiliki sertifikat aktif. Lakukan revoke atau rotate dulu.');
     }
 
-    const tokenEntry = this.validateToken(lurahUserId, enrollmentToken);
+    const tokenEntry = this.validateToken(lurahUserId, enrollmentToken, { purpose: 'ENROLLMENT' });
     const signed = caService.signCsr(csrPem);
 
     const keyRecord = await prisma.$transaction(async (tx) => {
@@ -117,7 +124,6 @@ class EnrollmentService {
         data: {
           lurahProfileId: profile.id,
           publicKey: signed.publicKeyPem,
-          encryptedPrivateKey: null,
           algorithm: 'RSA-SHA256',
           status: 'ACTIVE',
           certificatePem: signed.certificatePem,
@@ -146,6 +152,59 @@ class EnrollmentService {
 
   async getCertificate(lurahUserId) {
     return this.getActiveCertificateKey(lurahUserId);
+  }
+
+  async rotateCsr(lurahUserId, { enrollmentToken, csrPem, deviceLabel = null }) {
+    const profile = await this.getActiveLurahProfile(lurahUserId);
+    const currentKey = await this.getActiveCertificateKey(lurahUserId);
+    if (!currentKey) {
+      throw createError('ENROLLMENT_REQUIRED', 'Lurah belum memiliki sertifikat aktif untuk dirotasi');
+    }
+
+    const tokenEntry = this.validateToken(lurahUserId, enrollmentToken, { purpose: 'ROTATION' });
+    const signed = caService.signCsr(csrPem);
+    const rotatedAt = new Date();
+
+    const keyRecord = await prisma.$transaction(async (tx) => {
+      await tx.lurahKey.updateMany({
+        where: { lurahProfileId: profile.id, status: 'ACTIVE' },
+        data: {
+          status: 'REVOKED',
+          deactivatedAt: rotatedAt,
+          deactivateReason: 'ROUTINE_ROTATION',
+        },
+      });
+
+      return tx.lurahKey.create({
+        data: {
+          lurahProfileId: profile.id,
+          publicKey: signed.publicKeyPem,
+          algorithm: 'RSA-SHA256',
+          status: 'ACTIVE',
+          certificatePem: signed.certificatePem,
+          serialNumber: signed.serialNumber,
+          fingerprint: signed.fingerprint,
+          deviceLabel: deviceLabel || null,
+          enrolledAt: signed.issuedAt,
+          expiresAt: signed.expiresAt,
+        },
+      });
+    });
+
+    tokenEntry.used = true;
+
+    return {
+      keyId: keyRecord.id.toString(),
+      certificatePem: signed.certificatePem,
+      rootCaCertificatePem: caService.getRootCaPem(),
+      serialNumber: signed.serialNumber,
+      fingerprint: signed.fingerprint,
+      algorithm: keyRecord.algorithm,
+      issuedAt: signed.issuedAt,
+      expiresAt: signed.expiresAt,
+      revokedKeyId: currentKey.id.toString(),
+      revokedAt: rotatedAt,
+    };
   }
 }
 

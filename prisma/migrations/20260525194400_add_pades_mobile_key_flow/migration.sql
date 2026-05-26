@@ -3,7 +3,7 @@
 CREATE TYPE "SigningSessionStatus" AS ENUM ('PENDING', 'COMPLETED', 'EXPIRED', 'REJECTED');
 
 ALTER TABLE "lurah_keys"
-  ALTER COLUMN "encrypted_private_key" DROP NOT NULL,
+  DROP COLUMN "encrypted_private_key",
   ADD COLUMN "certificate_pem" TEXT,
   ADD COLUMN "serial_number" VARCHAR(64),
   ADD COLUMN "fingerprint" VARCHAR(128),
@@ -14,6 +14,9 @@ ALTER TABLE "lurah_keys"
 CREATE UNIQUE INDEX "lurah_keys_serial_number_key" ON "lurah_keys"("serial_number");
 CREATE UNIQUE INDEX "lurah_keys_fingerprint_key" ON "lurah_keys"("fingerprint");
 CREATE INDEX "lurah_keys_fingerprint_idx" ON "lurah_keys"("fingerprint");
+
+ALTER TABLE "verification_logs"
+  RENAME COLUMN "body_pass" TO "document_pass";
 
 CREATE TABLE "signing_sessions" (
   "id" BIGSERIAL NOT NULL,

@@ -33,6 +33,9 @@ router.get('/certificate', requireRole('lurah'), keyController.getCertificate.bi
 // GET /keys/status - Check key status (Lurah only)
 router.get('/status', requireRole('lurah'), keyController.getKeyStatus.bind(keyController));
 
+// POST /keys/rotate - Rotate active certificate/key (Lurah only)
+router.post('/rotate', requireRole('lurah'), keyController.rotateKey.bind(keyController));
+
 // ==================== ADMIN KEY MANAGEMENT ====================
 
 // POST /keys/:id/revoke - Revoke a key (Admin only)

@@ -1,5 +1,5 @@
 import adminService from '../services/admin.service.js';
-import { formatUserResponse, formatValidateRequestResponse, formatLurahProfileResponse, formatSekertarisProfileResponse } from '../utils/formatters.js';
+import { formatUserResponse, formatUserWithKependudukanResponse, formatValidateRequestResponse, formatLurahProfileResponse, formatSekertarisProfileResponse } from '../utils/formatters.js';
 
 /**
  * Admin Controller - Handles admin request/response
@@ -38,7 +38,7 @@ class AdminController {
 
       const user = await adminService.getUserById(id);
 
-      res.json(formatUserResponse(user));
+      res.json(formatUserWithKependudukanResponse(user));
     } catch (error) {
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({

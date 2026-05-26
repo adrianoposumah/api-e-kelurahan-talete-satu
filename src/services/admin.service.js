@@ -49,6 +49,9 @@ class AdminService {
   async getUserById(userId) {
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
+      include: {
+        kependudukan: true,
+      },
     });
 
     if (!user) {

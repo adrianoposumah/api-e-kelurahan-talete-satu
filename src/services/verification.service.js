@@ -138,6 +138,17 @@ class VerificationService {
         return { pass: false, status: 'missing_key_record', reason: 'Rekaman key penanda tangan tidak ditemukan', signerCommonName: pkcs7.signerCommonName || null };
       }
       if (issuedLetter.signatureKey.status !== 'ACTIVE') {
+        const signedAt = issuedLetter.signedAt || issuedLetter.issuedAt;
+        const deactivatedAt = issuedLetter.signatureKey.deactivatedAt;
+        if (signedAt && deactivatedAt && signedAt <= deactivatedAt) {
+          return {
+            pass: true,
+            status: 'pass',
+            reason: `PAdES signature valid. Key penanda tangan saat ini berstatus ${issuedLetter.signatureKey.status}, tetapi surat ditandatangani sebelum key dinonaktifkan pada ${deactivatedAt.toISOString()}.`,
+            signerCommonName: pkcs7.signerCommonName || null,
+          };
+        }
+
         return { pass: false, status: 'revoked_key', reason: `Key penanda tangan berstatus ${issuedLetter.signatureKey.status}`, signerCommonName: pkcs7.signerCommonName || null };
       }
       if (issuedLetter.signatureKey.expiresAt && new Date() > issuedLetter.signatureKey.expiresAt) {
@@ -192,7 +203,7 @@ class VerificationService {
       decision: decision.status,
       serverPass: serverResult.pass,
       cryptoPass: padesResult.pass,
-      bodyPass: padesResult.pass,
+      documentPass: padesResult.pass,
     }).catch(() => {});
 
     return {
@@ -267,7 +278,7 @@ class VerificationService {
     };
   }
 
-  async recordVerificationAttempt({ verificationCode, decision, serverPass, cryptoPass, bodyPass }) {
+  async recordVerificationAttempt({ verificationCode, decision, serverPass, cryptoPass, documentPass }) {
     if (!prisma.verificationLog) return;
 
     await prisma.verificationLog.create({
@@ -276,7 +287,7 @@ class VerificationService {
         decisionStatus: decision,
         serverPass: !!serverPass,
         cryptoPass: !!cryptoPass,
-        bodyPass: !!bodyPass,
+        documentPass: !!documentPass,
       },
     });
   }

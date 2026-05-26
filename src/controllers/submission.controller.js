@@ -603,6 +603,7 @@ class SubmissionController {
           expiresAt: result.expiresAt,
           pdfBase64: result.pdfBase64,
           bytesToSignBase64: result.bytesToSignBase64,
+          letterPreview: result.preview,
           preview: result.preview,
         },
       });

@@ -22,7 +22,12 @@ class KeyController {
    */
   async requestEnrollmentToken(req, res, next) {
     try {
-      const result = await enrollmentService.issueEnrollmentToken(req.user.userId);
+      const purpose = req.body?.purpose === 'rotation' || req.body?.purpose === 'ROTATION' || req.body?.rotate === true ? 'ROTATION' : 'ENROLLMENT';
+      const result = await enrollmentService.issueEnrollmentToken(req.user.userId, {
+        allowExistingActiveKey: purpose === 'ROTATION',
+        requireExistingActiveKey: purpose === 'ROTATION',
+        purpose,
+      });
       res.json({
         success: true,
         data: {
@@ -41,6 +46,9 @@ class KeyController {
       }
       if (error.code === 'NOT_FOUND') {
         return res.status(404).json({ error: 'Not Found', message: error.message });
+      }
+      if (error.code === 'ENROLLMENT_REQUIRED') {
+        return res.status(412).json({ error: 'Precondition Failed', message: error.message });
       }
       next(error);
     }
@@ -133,6 +141,59 @@ class KeyController {
   }
 
   /**
+   * POST /keys/rotate - Rotate active Lurah certificate with a new CSR.
+   */
+  async rotateKey(req, res, next) {
+    try {
+      const { enrollmentToken, csrPem, deviceLabel } = req.body || {};
+      if (!enrollmentToken || !csrPem) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'enrollmentToken dan csrPem wajib diisi',
+        });
+      }
+
+      const result = await enrollmentService.rotateCsr(req.user.userId, {
+        enrollmentToken,
+        csrPem,
+        deviceLabel,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Sertifikat berhasil dirotasi',
+        data: {
+          keyId: result.keyId,
+          certificatePem: result.certificatePem,
+          rootCaCertificatePem: result.rootCaCertificatePem,
+          serialNumber: result.serialNumber,
+          fingerprint: result.fingerprint,
+          algorithm: result.algorithm,
+          issuedAt: result.issuedAt,
+          expiresAt: result.expiresAt,
+          revokedKeyId: result.revokedKeyId,
+          revokedAt: result.revokedAt,
+          deactivateReason: 'ROUTINE_ROTATION',
+        },
+      });
+    } catch (error) {
+      if (error.code === 'ENROLLMENT_TOKEN_EXPIRED') {
+        return res.status(410).json({ error: 'Gone', message: error.message });
+      }
+      if (['INVALID_INPUT', 'INVALID_CSR', 'SUBJECT_MISMATCH'].includes(error.code)) {
+        return res.status(400).json({ error: 'Bad Request', message: error.message });
+      }
+      if (error.code === 'ENROLLMENT_REQUIRED') {
+        return res.status(412).json({ error: 'Precondition Failed', message: error.message });
+      }
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({ error: 'Not Found', message: error.message });
+      }
+      next(error);
+    }
+  }
+
+  /**
    * POST /keys/:id/revoke - Revoke a key (Admin only)
    */
   async revokeKey(req, res, next) {
@@ -179,7 +240,7 @@ class KeyController {
 
   /**
    * GET /keys - List all keys (Admin only)
-   * Never includes encryptedPrivateKey
+   * Only includes public certificate/key material.
    */
   async listKeys(req, res, next) {
     try {
@@ -301,7 +362,6 @@ class KeyController {
         });
       }
 
-      // Prefer signatureKeyId (exact key used) over signedBy (lurahProfileId)
       const keyRecord = letter.signatureKeyId
         ? await prisma.lurahKey.findUnique({
             where: { id: letter.signatureKeyId },
@@ -315,19 +375,7 @@ class KeyController {
               },
             },
           })
-        : await prisma.lurahKey.findFirst({
-            where: { lurahProfileId: letter.signedBy },
-            include: {
-              lurahProfile: {
-                select: {
-                  namaLengkap: true,
-                  nip: true,
-                  jabatan: true,
-                },
-              },
-            },
-            orderBy: { createdAt: 'desc' },
-          });
+        : null;
 
       if (!keyRecord) {
         return res.status(404).json({

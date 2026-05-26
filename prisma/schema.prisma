@@ -338,7 +338,6 @@ model LurahKey {
   id                  BigInt        @id @default(autoincrement()) @db.BigInt
   lurahProfileId      BigInt        @map("lurah_profile_id") @db.BigInt
   publicKey           String        @map("public_key") @db.Text
-  encryptedPrivateKey String?       @map("encrypted_private_key") @db.Text
   algorithm           String        @default("RSA-SHA256") @db.VarChar(50)
   status              KeyStatus     @default(ACTIVE)
 
@@ -448,7 +447,7 @@ model VerificationLog {
   decisionStatus   String   @map("decision_status")
   serverPass       Boolean  @map("server_pass")
   cryptoPass       Boolean  @map("crypto_pass")
-  bodyPass         Boolean  @map("body_pass")
+  documentPass     Boolean  @map("document_pass")
   attemptedAt      DateTime @default(now()) @map("attempted_at")
 
   @@map("verification_logs")

@@ -10,13 +10,13 @@ import prisma from '../config/prisma.js';
  * stored on the server.
  */
 class CryptoService {
-  verifySignatureWithCertificate(dataToSign, signature, certificatePem) {
+  verifySignatureWithCertificate(bytesToSign, signature, certificatePem) {
     try {
       const cert = forge.pki.certificateFromPem(certificatePem);
       const publicKeyPem = forge.pki.publicKeyToPem(cert.publicKey);
       const signatureBuffer = Buffer.isBuffer(signature) ? signature : Buffer.from(signature, 'base64');
       const verifier = crypto.createVerify('RSA-SHA256');
-      verifier.update(Buffer.isBuffer(dataToSign) ? dataToSign : Buffer.from(dataToSign, 'utf8'));
+      verifier.update(Buffer.isBuffer(bytesToSign) ? bytesToSign : Buffer.from(bytesToSign, 'utf8'));
       verifier.end();
       return verifier.verify(publicKeyPem, signatureBuffer);
     } catch {

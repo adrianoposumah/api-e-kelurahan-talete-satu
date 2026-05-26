@@ -6,8 +6,25 @@ meta {
 
 get {
   url: {{url}}/health
-  body: none
-  auth: inherit
+  auth: none
+}
+
+tests {
+  test("status is expected", function() {
+    expect([200]).to.include(res.status);
+  });
+
+  test("response is JSON when body is present", function() {
+    const contentType = res.headers["content-type"] || res.headers["Content-Type"] || "";
+    expect(contentType).to.include("application/json");
+  });
+
+  test("response has expected shape", function() {
+    expect(res.body).to.be.an("object");
+    const expectedKeys = ["status","timestamp"];
+    const bodyKeys = Object.keys(res.body);
+    expect(expectedKeys.some((key) => bodyKeys.includes(key))).to.equal(true);
+  });
 }
 
 settings {

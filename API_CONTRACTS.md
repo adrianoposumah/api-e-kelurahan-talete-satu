@@ -1,52 +1,63 @@
-# REST API Contracts — Mobile Key Architecture v2.0
+# REST API Contracts — Mobile Key + PAdES v2.0
 
-Dokumentasi endpoint backend e-Kelurahan untuk arsitektur mobile-stored key. Dokumen ini menyesuaikan format dan path dengan API eksisting sistem (Express v5, prefix `/v1`).
+Dokumentasi endpoint backend e-Kelurahan untuk arsitektur mobile-stored key dengan standar **PAdES-B-B**. Dokumen ini mengikuti arahan PAdES di [BACKEND_INSTRUCTION.md](BACKEND_INSTRUCTION.md), tetapi tetap memakai route eksisting Express dengan prefix `/v1`.
 
-**Base URL:** `http://localhost:5000/v1` (development) atau `${BASE_URL}/v1` (lihat `src/config/env.js`).
+**Base URL:** `http://localhost:5000/v1` (development) atau `${BASE_URL}/v1`.
 
-**Auth:** Bearer JWT pada header `Authorization: Bearer <token>` kecuali ditandai PUBLIC. Token diverifikasi oleh [src/middleware/auth.middleware.js](src/middleware/auth.middleware.js) dan menempelkan `req.user = { userId, role, ... }`.
+**Auth:** Bearer JWT pada header `Authorization: Bearer <token>` kecuali endpoint yang ditandai PUBLIC. Token diverifikasi oleh [src/middleware/auth.middleware.js](src/middleware/auth.middleware.js) dan menempelkan `req.user = { userId, role, ... }`.
 
 **Content-Type:** `application/json` kecuali endpoint upload PDF (`multipart/form-data`).
 
-**Response envelope (mengikuti pola eksisting):**
+**Response envelope:** endpoint baru mengikuti pola eksisting project:
 
-- Sukses (object):
+- Sukses object:
   ```json
-  { "success": true, "data": { ... } }
+  { "success": true, "data": { "...": "..." } }
   ```
-  atau (action):
+- Sukses action:
   ```json
-  { "message": "...", "data": { ... } }
+  { "message": "...", "data": { "...": "..." } }
   ```
-- Sukses (list):
+- Sukses list:
   ```json
-  { "data": [ ... ], "pagination": { "page": 1, "limit": 10, "total": 0, "total_pages": 0 } }
+  { "data": [], "pagination": { "page": 1, "limit": 10, "total": 0, "total_pages": 0 } }
   ```
-- Error:
+- Error standar:
   ```json
   { "error": "Bad Request", "message": "human-readable description" }
   ```
-  Beberapa endpoint lama mengembalikan `{ "success": false, "message": "..." }`; pertahankan pola yang dipakai modul induknya.
+
+Beberapa endpoint lama masih mengembalikan `{ "success": false, "message": "..." }`; pertahankan pola modul induknya untuk backward compatibility.
 
 ---
 
-## 1. Auth (Eksisting — Tidak Diubah)
+## 1. Auth
 
-`POST /v1/auth/login`, `POST /v1/auth/refresh`, dst. Sudah didefinisikan di [swagger.yaml](swagger.yaml). Lurah login pakai endpoint yang sama dengan role `lurah`.
+`POST /v1/auth/login`, `POST /v1/auth/refresh`, `POST /v1/auth/logout`, dan endpoint auth lain tidak berubah. Lurah login memakai endpoint yang sama dengan role `lurah`.
 
 ---
 
-## 2. Enrollment Endpoints (Lurah Mobile)
+## 2. Enrollment dan Certificate
 
-Digunakan aplikasi mobile Lurah saat pertama kali install untuk mendaftarkan public key + menerima sertifikat X.509 dari Root CA server. Routes ditempel di [src/routes/key.routes.js](src/routes/key.routes.js).
+Routes berada di [src/routes/key.routes.js](src/routes/key.routes.js).
 
 ### POST `/v1/keys/enrollment-token`
 
-Initiate enrollment session. Server return token yang harus disertakan saat submit CSR. Token ini singkat-umur (TTL 10 menit).
+Membuat token singkat umur untuk submit CSR. TTL token adalah 10 menit.
 
-**Auth:** Lurah JWT (`role=lurah`).
+**Auth:** Lurah JWT.
 
-**Body:** Kosong (atau optional `{ "deviceLabel": "string" }`).
+**Body enrollment awal:** kosong atau:
+```json
+{ "deviceLabel": "HP Dinas Lurah" }
+```
+
+**Body untuk rotasi device/key:**
+```json
+{ "purpose": "rotation" }
+```
+
+Jika `purpose` tidak dikirim, server menganggap token untuk enrollment awal dan akan menolak saat Lurah masih punya sertifikat aktif.
 
 **Response 200:**
 ```json
@@ -54,7 +65,7 @@ Initiate enrollment session. Server return token yang harus disertakan saat subm
   "success": true,
   "data": {
     "enrollmentToken": "string",
-    "expiresAt": "2026-05-25T12:10:00.000Z",
+    "expiresAt": "2026-05-26T12:10:00.000Z",
     "subjectTemplate": {
       "commonName": "Lurah Talete Satu",
       "organization": "Kelurahan Talete Satu",
@@ -65,27 +76,32 @@ Initiate enrollment session. Server return token yang harus disertakan saat subm
 }
 ```
 
-**Response 409 — Sudah punya cert aktif:**
+**Response 409 untuk enrollment awal saat sudah aktif:**
 ```json
 {
   "error": "Conflict",
-  "message": "Lurah sudah memiliki key/cert aktif. Lakukan revoke atau rotate dulu.",
+  "message": "Lurah sudah memiliki sertifikat aktif. Lakukan revoke atau rotate dulu.",
   "data": { "activeKeyId": "123", "issuedAt": "2026-01-01T00:00:00.000Z" }
 }
 ```
 
+**Response 412 untuk token rotasi tanpa sertifikat aktif:**
+```json
+{ "error": "Precondition Failed", "message": "Lurah belum memiliki sertifikat aktif untuk dirotasi" }
+```
+
 ### POST `/v1/keys/csr`
 
-Submit PKCS#10 CSR untuk di-sign menjadi sertifikat X.509 oleh Root CA server.
+Submit PKCS#10 CSR untuk enrollment awal. Server memvalidasi signature CSR, subject template, lalu menandatangani CSR memakai Root CA.
 
 **Auth:** Lurah JWT.
 
 **Body:**
 ```json
 {
-  "enrollmentToken": "string dari endpoint sebelumnya",
+  "enrollmentToken": "token dari /keys/enrollment-token",
   "csrPem": "-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----",
-  "deviceLabel": "HP Dinas Lurah (optional)"
+  "deviceLabel": "HP Dinas Lurah"
 }
 ```
 
@@ -99,26 +115,27 @@ Submit PKCS#10 CSR untuk di-sign menjadi sertifikat X.509 oleh Root CA server.
     "certificatePem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
     "rootCaCertificatePem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
     "serialNumber": "01A2B3C4...",
-    "fingerprint": "SHA256 hex",
+    "fingerprint": "sha256 hex of DER cert",
     "algorithm": "RSA-SHA256",
-    "issuedAt": "2026-05-25T12:00:00.000Z",
-    "expiresAt": "2029-05-25T12:00:00.000Z"
+    "issuedAt": "2026-05-26T12:00:00.000Z",
+    "expiresAt": "2029-05-26T12:00:00.000Z"
   }
 }
 ```
 
-**Error responses:**
+**Errors:**
 
 | HTTP | `error` | `message` |
 |---|---|---|
+| 400 | `Bad Request` | `enrollmentToken dan csrPem wajib diisi` |
 | 400 | `Bad Request` | `CSR signature tidak valid atau format malformed` |
-| 400 | `Bad Request` | `Subject CSR tidak match template enrollment` |
+| 400 | `Bad Request` | `Subject CSR tidak match ...` |
+| 409 | `Conflict` | `Lurah sudah memiliki sertifikat aktif. Lakukan revoke atau rotate dulu.` |
 | 410 | `Gone` | `Enrollment token sudah expired` |
-| 409 | `Conflict` | `Lurah sudah memiliki key aktif. Revoke dulu.` |
 
 ### GET `/v1/keys/certificate`
 
-Ambil sertifikat aktif untuk Lurah yang authenticated (mobile pakai endpoint ini untuk reload cert lokal).
+Mengambil sertifikat aktif Lurah authenticated.
 
 **Auth:** Lurah JWT.
 
@@ -131,35 +148,35 @@ Ambil sertifikat aktif untuk Lurah yang authenticated (mobile pakai endpoint ini
     "certificatePem": "-----BEGIN CERTIFICATE-----...",
     "rootCaCertificatePem": "-----BEGIN CERTIFICATE-----...",
     "serialNumber": "01A2B3C4...",
-    "fingerprint": "SHA256 hex",
+    "fingerprint": "sha256 hex",
     "deviceLabel": "HP Dinas Lurah",
     "algorithm": "RSA-SHA256",
     "status": "ACTIVE",
-    "issuedAt": "2026-05-25T12:00:00.000Z",
-    "expiresAt": "2029-05-25T12:00:00.000Z"
+    "issuedAt": "2026-05-26T12:00:00.000Z",
+    "expiresAt": "2029-05-26T12:00:00.000Z"
   }
 }
 ```
 
 **Response 404:**
 ```json
-{
-  "error": "Not Found",
-  "message": "Lurah belum melakukan enrollment"
-}
+{ "error": "Not Found", "message": "Lurah belum melakukan enrollment" }
 ```
 
-### GET `/v1/keys/status` (Eksisting — Tetap)
+### GET `/v1/keys/status`
 
-Sudah didefinisikan di [src/controllers/key.controller.js:174-201](src/controllers/key.controller.js#L174-L201). Tetap dipertahankan, return `{ success, has_active_key, data }`. Mobile dapat memakai endpoint ini sebagai cek ringan sebelum panggil `/certificate`.
+Endpoint cek ringan yang sudah ada. Response tetap:
+```json
+{ "success": true, "has_active_key": true, "data": { "...": "..." } }
+```
 
 ---
 
-## 3. Public Key / Certificate Endpoints (Verifier)
+## 3. Public Key / Certificate
 
-### GET `/v1/keys/active` (PUBLIC — Eksisting, response diperluas)
+### GET `/v1/keys/active` (PUBLIC)
 
-Tetap dipertahankan. Setelah migrasi v2.0, response berisi cert + chain.
+Mengambil public key/certificate aktif untuk verifier eksternal.
 
 **Response 200:**
 ```json
@@ -171,8 +188,8 @@ Tetap dipertahankan. Setelah migrasi v2.0, response berisi cert + chain.
     "certificatePem": "-----BEGIN CERTIFICATE-----...",
     "rootCaCertificatePem": "-----BEGIN CERTIFICATE-----...",
     "algorithm": "RSA-SHA256",
-    "createdAt": "2026-05-25T12:00:00.000Z",
-    "expiresAt": "2029-05-25T12:00:00.000Z",
+    "createdAt": "2026-05-26T12:00:00.000Z",
+    "expiresAt": "2029-05-26T12:00:00.000Z",
     "signer": {
       "nama": "Lurah Talete Satu",
       "nip": "1234567890",
@@ -182,34 +199,33 @@ Tetap dipertahankan. Setelah migrasi v2.0, response berisi cert + chain.
 }
 ```
 
-### GET `/v1/keys/public/:verificationCode` (PUBLIC — Eksisting, response diperluas)
+### GET `/v1/keys/public/:verificationCode` (PUBLIC)
 
-Tetap dipertahankan. Response tambahkan `certificatePem` dan `rootCaCertificatePem` agar verifier eksternal bisa membangun trust chain tanpa request kedua.
+Mengambil public key/certificate yang dipakai oleh surat tertentu. Response memuat `certificatePem` dan `rootCaCertificatePem`.
 
 ---
 
-## 4. Signing Workflow Endpoints
+## 4. PAdES Signing Workflow
 
-Lurah lihat daftar tugas tanda tangan via endpoint submission **yang sudah ada**, lalu jalankan flow 2 fase: prepare-signing → submit-signature.
+Lurah tetap melihat tugas melalui endpoint submission eksisting, lalu menjalankan signing dua fase.
 
-### GET `/v1/submissions/lurah/list` (Eksisting — Tidak Diubah)
+### GET `/v1/submissions/lurah/list`
 
-Sudah ada di [src/routes/submission.routes.js:48](src/routes/submission.routes.js#L48). Lurah pakai endpoint ini dengan `status=pending_lurah` untuk daftar tugas pending. Tidak perlu endpoint baru.
+Eksisting. Gunakan query/filter yang sudah didukung sistem untuk menampilkan submission `pending_lurah`.
 
-### GET `/v1/submissions/lurah/:id` (Eksisting — Tidak Diubah)
+### GET `/v1/submissions/lurah/:id`
 
-Detail submission untuk review. Sudah ada di [src/routes/submission.routes.js:54](src/routes/submission.routes.js#L54).
+Eksisting. Detail submission untuk review sebelum tanda tangan.
 
-### POST `/v1/submissions/:id/lurah/prepare-signing` (BARU)
+### POST `/v1/submissions/:id/lurah/prepare-signing`
 
-Server render draft PDF, build canonical data v2.0 dengan body_hash, simpan ke `signing_sessions`, kembalikan data untuk ditandatangani mobile. **Endpoint ini tidak finalize letter** — letter baru terbit setelah signature dari mobile masuk.
+Server merender draft PDF, memasukkan placeholder PAdES `/ByteRange`, menghitung hash byte range, membangun DER-encoded PKCS#7 signedAttributes, menyimpan `SigningSession`, lalu mengirim bytes yang harus ditandatangani mobile.
 
-**Auth:** Lurah JWT (`role=lurah`).
+Endpoint ini **tidak** menerbitkan surat. Surat baru final setelah `submit-signature`.
 
-**Body:** Kosong, atau optional:
-```json
-{ "note": "string (catatan approval)", "keterangan": "string (deskripsi tambahan untuk letter)" }
-```
+**Auth:** Lurah JWT.
+
+**Body:** kosong.
 
 **Response 200:**
 ```json
@@ -217,45 +233,51 @@ Server render draft PDF, build canonical data v2.0 dengan body_hash, simpan ke `
   "success": true,
   "data": {
     "sessionId": "456",
-    "expiresAt": "2026-05-25T12:05:00.000Z",
+    "expiresAt": "2026-05-26T12:05:00.000Z",
     "pdfBase64": "JVBERi0xLjQK...",
-    "dataToSign": "{\"version\":\"2.0\",\"type\":\"domisili\",...}",
-    "bodyHash": "sha256hex...",
+    "bytesToSignBase64": "base64 DER signedAttributes SET OF",
+    "letterPreview": {
+      "letterNumber": "AB12CD34-001/2009/SKD/V/2026",
+      "verificationCode": "AB12CD34-001",
+      "issuedDate": "2026-05-26T12:00:00.000Z",
+      "expiresAt": "2026-08-26T12:00:00.000Z"
+    },
     "preview": {
       "letterNumber": "AB12CD34-001/2009/SKD/V/2026",
       "verificationCode": "AB12CD34-001",
-      "issuedDate": "2026-05-25T12:00:00.000Z",
-      "expiresAt": "2026-08-25T12:00:00.000Z"
+      "issuedDate": "2026-05-26T12:00:00.000Z",
+      "expiresAt": "2026-08-26T12:00:00.000Z"
     }
   }
 }
 ```
 
-**Catatan:**
-- `dataToSign` adalah canonical JSON deterministik versi `"2.0"` (lihat [Section 8](#8-canonical-data-v20)).
-- `bodyHash` dapat diverifikasi mobile dengan men-compute hash dari `pdfBase64` (mencegah server berbohong).
-- Format `letterNumber` dan `verificationCode` mengikuti generator eksisting di [src/services/letter.service.js:43-88](src/services/letter.service.js#L43-L88) (tidak diubah).
+`bytesToSignBase64` adalah DER-encoded PKCS#7 signedAttributes dengan tag SET OF (`0x31`). Mobile harus menandatangani bytes ini persis menggunakan `SHA256withRSA` dari Android Keystore. Jangan pre-hash di mobile.
 
-**Error responses:**
+`preview` adalah alias kompatibilitas untuk `letterPreview`.
+
+**Errors:**
 
 | HTTP | `error` | `message` |
 |---|---|---|
 | 404 | `Not Found` | `Submission tidak ditemukan` |
 | 409 | `Conflict` | `Submission tidak dalam status pending_lurah` |
 | 409 | `Conflict` | `Surat sudah pernah diterbitkan` |
-| 412 | `Precondition Failed` | `Lurah belum melakukan enrollment` |
+| 412 | `Precondition Failed` | `Lurah belum melakukan enrollment sertifikat` |
 
-### POST `/v1/submissions/:id/lurah/submit-signature` (BARU)
+### POST `/v1/submissions/:id/lurah/submit-signature`
 
-Mobile kirim signature yang dihasilkan Android Keystore. Server validate dan finalize letter.
+Mobile mengirim signature RSA atas `bytesToSignBase64`. Server memverifikasi signature, membangun PKCS#7 SignedData, menanamkannya ke placeholder PDF, menyimpan final PDF, lalu membuat `IssuedLetter`.
 
-**Auth:** Lurah JWT (`role=lurah`).
+**Auth:** Lurah JWT.
 
 **Body:**
 ```json
 {
   "sessionId": "456",
-  "signatureBase64": "base64 encoded RSA signature"
+  "signatureBase64": "base64 encoded RSA signature",
+  "note": "catatan approval optional",
+  "keterangan": "keterangan surat optional"
 }
 ```
 
@@ -264,188 +286,206 @@ Mobile kirim signature yang dihasilkan Android Keystore. Server validate dan fin
 {
   "message": "Submission berhasil disetujui dan surat telah diterbitkan",
   "data": {
-    "submission": { ... },
+    "submission": { "...": "..." },
     "letter": {
+      "issued_letter_id": "clx...",
       "letter_number": "AB12CD34-001/2009/SKD/V/2026",
       "verification_code": "AB12CD34-001",
       "verification_url": "https://verify.example.com/letters?code=AB12CD34-001",
-      "pdf_path": "/public/letters/AB12CD34-001.pdf",
-      "signed_at": "2026-05-25T12:02:30.000Z",
-      "expires_at": "2026-08-25T12:00:00.000Z"
+      "pdf_path": "/public/letters/letter_AB12CD34-001.pdf",
+      "signed_at": "2026-05-26T12:02:30.000Z",
+      "expires_at": "2026-08-26T12:00:00.000Z"
     }
   }
 }
 ```
 
-Catatan: response data shape ini sengaja menyerupai response endpoint approve eksisting agar konsumer dashboard tidak perlu refactor besar.
-
-**Error responses:**
+**Errors:**
 
 | HTTP | `error` | `message` |
 |---|---|---|
-| 400 | `Bad Request` | `Signature tidak valid untuk dataToSign yang diberikan` |
-| 410 | `Gone` | `Signing session sudah lewat 5 menit. Mulai ulang dari prepare-signing.` |
-| 409 | `Conflict` | `Signing session sudah pernah selesai` |
+| 400 | `Bad Request` | `sessionId dan signatureBase64 wajib diisi` |
+| 400 | `Bad Request` | `Signature tidak valid untuk bytesToSign yang diberikan` |
+| 403 | `Forbidden` | `Sertifikat penanda tangan sudah revoked atau inactive` |
+| 409 | `Conflict` | `Signing session sudah selesai` |
 | 409 | `Conflict` | `Surat sudah pernah diterbitkan` |
-| 403 | `Forbidden` | `Sertifikat penanda tangan sudah revoked` |
+| 410 | `Gone` | `Signing session sudah lewat 5 menit. Mulai ulang dari prepare-signing.` |
 
-### POST `/v1/submissions/:id/lurah/reject` (Eksisting — Tidak Diubah)
+### POST `/v1/submissions/:id/lurah/reject`
 
-Sudah ada di [src/routes/submission.routes.js:71](src/routes/submission.routes.js#L71). Tidak perlu dibuat ulang.
+Eksisting. Tidak berubah.
 
-### POST `/v1/submissions/:id/lurah/approve` (DEPRECATED — Dihapus)
+### POST `/v1/submissions/:id/lurah/approve` (DEPRECATED)
 
-Endpoint server-side signing v1.1 yang memakai `passphrase` di body **dihapus total** di v2.0. Permintaan ke endpoint ini akan return:
+Endpoint server-side signing lama sudah tidak didukung.
 
+**Response 410:**
 ```json
 {
   "error": "Gone",
-  "message": "Endpoint ini sudah tidak didukung. Gunakan /v1/submissions/:id/lurah/prepare-signing + /submit-signature."
+  "message": "Endpoint ini sudah tidak didukung. Gunakan /v1/submissions/:id/lurah/prepare-signing dan /submit-signature."
 }
 ```
-HTTP 410.
 
 ---
 
-## 5. Verification Endpoints (Eksisting — Truth Table Diperluas)
+## 5. Verification
 
-Endpoint **tidak berubah**. Hanya logika di [src/services/verification.service.js](src/services/verification.service.js) yang dirombak untuk:
-1. Memvalidasi cert chain ke Root CA (`trust` check).
-2. Menambah status `UNTRUSTED_SIGNER` saat cert tidak terbit oleh Root CA atau sudah expired.
+Verifier memakai hybrid check:
 
-### POST `/v1/verify`
+1. Server check: kode verifikasi ditemukan, surat tidak dicabut, surat belum expired.
+2. PAdES check: `/ByteRange` valid, `messageDigest` cocok, signature RSA valid, cert chain valid ke Root CA, fingerprint signer cocok dengan key yang terekam pada `IssuedLetter`.
 
-Upload PDF, multipart `file`. Sudah didefinisikan di [src/routes/verification.routes.js:46](src/routes/verification.routes.js#L46).
+### POST `/v1/verify` (PUBLIC)
 
-**Response 200 (struktur sudah ada, hanya tambah `trustCheck`):**
+Upload PDF untuk diverifikasi.
+
+**Content-Type:** `multipart/form-data`
+
+**Body:** field `file` berisi PDF.
+
+**Response 200:**
 ```json
 {
-  "valid": true,
-  "status": "VALID",
-  "message": "Surat valid",
-  "serverCheck": { "pass": true, "status": "pass", "reason": "..." },
-  "cryptoCheck": { "pass": true, "reason": "...", "keyStatus": "ACTIVE" },
-  "bodyCheck":   { "pass": true, "reason": "..." },
-  "trustCheck":  { "pass": true, "reason": "Cert chain terverifikasi ke Root CA", "signerCommonName": "Lurah Talete Satu" },
-  "letter": { "letterNumber": "...", "letterType": "...", "issuedAt": "..." }
+  "success": true,
+  "data": {
+    "valid": true,
+    "status": "VALID",
+    "message": "Surat valid",
+    "serverCheck": { "pass": true, "status": "pass", "reason": "Letter found in records" },
+    "cryptoCheck": {
+      "pass": true,
+      "reason": "PAdES signature valid",
+      "keyStatus": "ACTIVE"
+    },
+    "bodyCheck": { "pass": true, "reason": "PAdES signature valid", "skipped": false },
+    "trustCheck": {
+      "pass": true,
+      "reason": "Cert chain terverifikasi ke Root CA",
+      "signerCommonName": "Lurah Talete Satu"
+    },
+    "letter": {
+      "letterNumber": "AB12CD34-001/2009/SKD/V/2026",
+      "letterType": "domisili",
+      "issuedAt": "2026-05-26T12:00:00.000Z"
+    }
+  }
 }
 ```
 
-Status set yang dapat muncul: `VALID`, `BODY_MODIFIED`, `CANONICAL_MODIFIED`, `TAMPERED`, `REVOKED`, `EXPIRED`, `FAKE`, `NOT_REGISTERED`, `NOT_APPROVED`, `RECORD_MISMATCH`, `MALFORMED`, `EXPIRED_AND_MODIFIED`, `REVOKED_AND_MODIFIED`, `UNTRUSTED_SIGNER` (baru di v2.0).
+**Status yang dapat muncul:**
 
-### GET `/v1/verify/code/:verificationCode` & GET `/v1/letters/verify/:code`
+| Kondisi | `status` |
+|---|---|
+| Server check pass dan PAdES pass | `VALID` |
+| PDF/body berubah, signature invalid, atau signer mismatch | `TAMPERED` |
+| Surat di DB dicabut | `REVOKED` |
+| Surat di DB expired | `EXPIRED` |
+| Cert signer tidak dipercaya Root CA | `UNTRUSTED_SIGNER` |
+| Signature valid tetapi kode tidak terdaftar | `UNREGISTERED_BUT_VALID_SIGNATURE` |
+| PDF tidak memiliki signature PAdES atau tidak bisa diparse | `MALFORMED` |
+| Tidak terdaftar dan PAdES gagal | `FAKE` |
 
-Eksisting. Response mengikuti pola yang sama dengan tambahan `trustCheck`.
+**Catatan revoked/rotation key:** surat historis tetap `VALID` jika `IssuedLetter.signedAt <= LurahKey.deactivatedAt`. Dalam kondisi ini `cryptoCheck.keyStatus` dapat bernilai `REVOKED` atau `INACTIVE`, dan `cryptoCheck.reason` menjelaskan bahwa surat ditandatangani sebelum key dinonaktifkan.
+
+### GET `/v1/verify/code/:verificationCode` (PUBLIC)
+
+Memverifikasi PDF yang tersimpan di server berdasarkan kode verifikasi. Response sama dengan `POST /v1/verify`, ditambah objek `pdf` berisi metadata dan `dataUrl`.
+
+### GET `/v1/letters/verify/:code` (PUBLIC)
+
+Endpoint legacy publik untuk verifikasi by code. Secara service memakai verifier PAdES yang sama, tetapi controller lama dapat membungkus response untuk kebutuhan backward compatibility.
 
 ---
 
-## 6. Lifecycle Endpoints
+## 6. Lifecycle
 
-### POST `/v1/keys/rotate` (BARU)
+### POST `/v1/keys/rotate`
 
-Lurah mau ganti device. Generate cert baru, key lama otomatis di-set `status=REVOKED` dengan `deactivateReason='ROUTINE_ROTATION'`.
+Rotasi device/key Lurah. Flow:
+
+1. Lurah meminta token dengan `POST /v1/keys/enrollment-token` body `{ "purpose": "rotation" }`.
+2. Mobile membuat keypair baru di Android Keystore.
+3. Mobile mengirim CSR baru ke endpoint ini.
+4. Server menandatangani CSR, membuat `LurahKey` baru `ACTIVE`, dan menandai semua key aktif sebelumnya sebagai `REVOKED` dengan `deactivateReason = "ROUTINE_ROTATION"`.
 
 **Auth:** Lurah JWT.
 
 **Body:**
 ```json
 {
-  "enrollmentToken": "string (request via /enrollment-token dulu)",
+  "enrollmentToken": "token purpose rotation",
   "csrPem": "-----BEGIN CERTIFICATE REQUEST-----...",
   "deviceLabel": "HP Baru Lurah"
 }
 ```
 
-**Response 201:** Sama dengan `POST /v1/keys/csr`.
+**Response 201:**
+```json
+{
+  "success": true,
+  "message": "Sertifikat berhasil dirotasi",
+  "data": {
+    "keyId": "124",
+    "certificatePem": "-----BEGIN CERTIFICATE-----...",
+    "rootCaCertificatePem": "-----BEGIN CERTIFICATE-----...",
+    "serialNumber": "01A2B3C4...",
+    "fingerprint": "sha256 hex",
+    "algorithm": "RSA-SHA256",
+    "issuedAt": "2026-05-26T12:00:00.000Z",
+    "expiresAt": "2029-05-26T12:00:00.000Z",
+    "revokedKeyId": "123",
+    "revokedAt": "2026-05-26T12:00:00.000Z",
+    "deactivateReason": "ROUTINE_ROTATION"
+  }
+}
+```
 
-### POST `/v1/keys/:id/revoke` (Eksisting — Tidak Diubah)
+**Errors:**
 
-Sudah ada di [src/routes/key.routes.js:30](src/routes/key.routes.js#L30). Admin-only. Tidak perlu dibuat ulang.
+| HTTP | `error` | `message` |
+|---|---|---|
+| 400 | `Bad Request` | `enrollmentToken dan csrPem wajib diisi` |
+| 400 | `Bad Request` | `Enrollment token tidak cocok dengan operasi yang diminta` |
+| 400 | `Bad Request` | CSR invalid atau subject mismatch |
+| 410 | `Gone` | Token expired |
+| 412 | `Precondition Failed` | `Lurah belum memiliki sertifikat aktif untuk dirotasi` |
 
-**Catatan:** Surat yang sudah terbit sebelum revoke tetap `VALID` di verifier (signature mathematically correct, signed_at < revoke time). Verifier menampilkan note di `cryptoCheck.reason` saat keyStatus = REVOKED.
+### POST `/v1/keys/:id/revoke`
+
+Admin-only. Revoke key secara manual. Tidak mengubah validitas surat historis yang sudah ditandatangani sebelum `deactivatedAt`.
 
 ---
 
-## 7. Rate Limiting (Rekomendasi)
+## 7. Rate Limiting
 
-Belum diimplementasi di sistem eksisting. Saat dipasang, gunakan limits berikut (per Lurah userId, kecuali public):
+Belum wajib di implementasi saat ini. Rekomendasi limit jika dipasang:
 
 | Endpoint | Limit |
 |---|---|
 | `POST /v1/auth/login` | 5 / menit / IP |
-| `POST /v1/keys/csr` | 3 / hari / Lurah |
 | `POST /v1/keys/enrollment-token` | 5 / hari / Lurah |
+| `POST /v1/keys/csr` | 3 / hari / Lurah |
+| `POST /v1/keys/rotate` | 3 / hari / Lurah |
 | `POST /v1/submissions/*/lurah/prepare-signing` | 30 / menit / Lurah |
 | `POST /v1/submissions/*/lurah/submit-signature` | 30 / menit / Lurah |
-| `POST /v1/verify` (public) | 60 / menit / IP |
-| `GET /v1/verify/code/*` (public) | 60 / menit / IP |
+| `POST /v1/verify` | 60 / menit / IP |
+| `GET /v1/verify/code/*` | 60 / menit / IP |
 
 Response 429:
 ```json
 { "error": "Too Many Requests", "message": "Terlalu banyak request. Coba lagi nanti." }
 ```
-Header `Retry-After: <seconds>`.
 
 ---
 
-## 8. Canonical Data v2.0
+## 8. Migration Notes
 
-Field order dipertahankan deterministik. Bedanya dengan v1.1: hanya `version` (`"1.1"` → `"2.0"`) dan tambahan `signer_certificate_fingerprint`.
-
-```json
-{
-  "version": "2.0",
-  "type": "domisili",
-  "nomor_surat": "AB12CD34-001/2009/SKD/V/2026",
-  "nama": "John Doe",
-  "nik": "7171...",
-  "tanggal_lahir": "1990-01-01",
-  "lingkungan": "I",
-  "tujuan": "Mengurus KTP baru",
-  "issued_date": "2026-05-25T12:00:00.000Z",
-  "signed_at": "2026-05-25T12:02:30.000Z",
-  "body_hash": "sha256hex...",
-  "issuer": {
-    "nama_lurah": "Lurah Talete Satu",
-    "nip_lurah": "1234567890",
-    "kelurahan": "Talete Satu",
-    "kecamatan": "Tomohon Tengah",
-    "kota": "Tomohon"
-  },
-  "verification_code": "AB12CD34-001",
-  "algorithm": "SHA256withRSA",
-  "public_key_fingerprint": "AA:BB:CC:...",
-  "signer_certificate_fingerprint": "SHA256 hex of X.509 cert"
-}
-```
-
-Implementasi: extend `cryptoService.buildCanonicalData` di [src/services/crypto.service.js:461-496](src/services/crypto.service.js#L461-L496) dengan branch versi.
-
----
-
-## 9. Standard Error Conventions
-
-Ikuti pola eksisting: HTTP code + `{ error, message }` envelope. Kode `error` adalah string status (mis. `"Bad Request"`, `"Forbidden"`), bukan slug.
-
-| HTTP | `error` | Konteks |
-|---|---|---|
-| 400 | `Bad Request` | Body validation, CSR invalid, signature invalid, subject mismatch |
-| 401 | `Unauthorized` | JWT missing/expired |
-| 403 | `Forbidden` | Role mismatch, cert revoked |
-| 404 | `Not Found` | Resource tidak ada, cert belum di-enroll |
-| 409 | `Conflict` | State transition invalid, sudah enrolled, session sudah selesai |
-| 410 | `Gone` | Token/session expired, endpoint deprecated |
-| 412 | `Precondition Failed` | Lurah belum enrollment saat ingin prepare-signing |
-| 429 | `Too Many Requests` | Rate limit |
-| 500 | `Internal Server Error` | Default fallback |
-
----
-
-## 10. Migration Notes
-
-| Sebelumnya (v1.1) | Setelah (v2.0) |
+| Sebelumnya | Setelah v2.0 PAdES |
 |---|---|
-| `POST /v1/keys/generate` (passphrase) | Diganti dengan `enrollment-token` + `csr` flow. Endpoint `/generate` di-deprecate (return 410). |
-| `POST /v1/submissions/:id/lurah/approve` body `{ passphrase, note, keterangan }` | Dihapus (410 Gone). Pakai `prepare-signing` + `submit-signature`. |
-| `LurahKey.encryptedPrivateKey` selalu ada | Kolom jadi nullable. Untuk key baru v2.0, kolom ini `NULL`. |
-| `version: "1.1"` di canonical | `version: "2.0"`. Verifier accept keduanya untuk surat historis. |
+| Server membuat/menyimpan private key Lurah | Private key hanya berada di Android Keystore |
+| `POST /v1/keys/generate` | Deprecated, return `410 Gone` |
+| `POST /v1/submissions/:id/lurah/approve` dengan passphrase | Deprecated, return `410 Gone` |
+| Custom canonical JSON/body hash untuk signature | Diganti PAdES `/ByteRange` + PKCS#7 SignedData |
+| Mobile menandatangani canonical string | Mobile menandatangani `bytesToSignBase64` DER signedAttributes |
+| Revoke key membuat surat lama terlihat invalid | Surat lama tetap valid jika signed sebelum key dinonaktifkan |

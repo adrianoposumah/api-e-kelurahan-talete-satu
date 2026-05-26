@@ -1,7 +1,7 @@
 meta {
   name: Set Lurah
   type: http
-  seq: 7
+  seq: 11
 }
 
 post {
@@ -12,13 +12,31 @@ post {
 
 body:json {
   {
-    "user_id": 2,
+    "user_id": "{{lurah_user_id}}",
     "nip": "199001012020011001",
-    "nama_lengkap": "Dr. Budi Santoso, S.H., M.H.",
+    "nama_lengkap": "Lurah Bruno",
     "jabatan": "Lurah Talete Satu",
     "pangkat": "Penata Tk.I (III/d)",
     "mulai_menjabat": "2026-01-01"
   }
+}
+
+tests {
+  test("status is expected", function() {
+    expect([201]).to.include(res.status);
+  });
+
+  test("response is JSON when body is present", function() {
+    const contentType = res.headers["content-type"] || res.headers["Content-Type"] || "";
+    expect(contentType).to.include("application/json");
+  });
+
+  test("response has expected shape", function() {
+    expect(res.body).to.be.an("object");
+    const expectedKeys = ["data","message","success","status","access_token","refresh_token","pagination"];
+    const bodyKeys = Object.keys(res.body);
+    expect(expectedKeys.some((key) => bodyKeys.includes(key))).to.equal(true);
+  });
 }
 
 settings {

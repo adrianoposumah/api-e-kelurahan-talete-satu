@@ -27,6 +27,7 @@ export const formatUserResponse = (user) => ({
 export const formatUserWithKependudukanResponse = (user) => ({
   ...formatUserResponse(user),
   kependudukan: user.isValidate && user.kependudukan ? formatKependudukanResponse(user.kependudukan) : undefined,
+  validate_requests: user.validateRequests ? user.validateRequests.map(formatValidateRequestResponse) : undefined,
 });
 
 /**

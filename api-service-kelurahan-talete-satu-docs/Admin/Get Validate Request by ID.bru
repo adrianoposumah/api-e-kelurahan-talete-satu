@@ -1,17 +1,34 @@
 meta {
   name: Get Validate Request by ID
   type: http
-  seq: 4
+  seq: 7
 }
 
 get {
   url: {{url}}/v1/admin/validate-requests/:id
-  body: none
   auth: inherit
 }
 
 params:path {
-  id: 1
+  id: {{validate_request_id}}
+}
+
+tests {
+  test("status is expected", function() {
+    expect([200]).to.include(res.status);
+  });
+
+  test("response is JSON when body is present", function() {
+    const contentType = res.headers["content-type"] || res.headers["Content-Type"] || "";
+    expect(contentType).to.include("application/json");
+  });
+
+  test("response has expected shape", function() {
+    expect(res.body).to.be.an("object");
+    const expectedKeys = ["data","message","success","status","access_token","refresh_token","pagination"];
+    const bodyKeys = Object.keys(res.body);
+    expect(expectedKeys.some((key) => bodyKeys.includes(key))).to.equal(true);
+  });
 }
 
 settings {

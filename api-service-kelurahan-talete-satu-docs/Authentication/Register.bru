@@ -12,10 +12,43 @@ post {
 
 body:json {
   {
-      "nama": "Lina Sari",
-      "no_hp": "{{no_hp}}",
-      "password": "{{password}}"
+    "nama": "{{nama}}",
+    "no_hp": "{{no_hp}}",
+    "password": "{{password}}"
   }
+}
+
+script:post-response {
+  const body = res.body || {};
+  const data = body.data || {};
+  const first = Array.isArray(data) ? data[0] : null;
+  const nestedData = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  
+  function setIf(name, value) {
+    if (value !== undefined && value !== null && value !== "") {
+      bru.setEnvVar(name, String(value));
+    }
+  }
+  
+  setIf("user_id", data.id || body.user?.id);
+}
+
+tests {
+  test("status is expected", function() {
+    expect([201]).to.include(res.status);
+  });
+  
+  test("response is JSON when body is present", function() {
+    const contentType = res.headers["content-type"] || res.headers["Content-Type"] || "";
+    expect(contentType).to.include("application/json");
+  });
+  
+  test("response has expected shape", function() {
+    expect(res.body).to.be.an("object");
+    const expectedKeys = ["data","message","success","status","access_token","refresh_token","pagination"];
+    const bodyKeys = Object.keys(res.body);
+    expect(expectedKeys.some((key) => bodyKeys.includes(key))).to.equal(true);
+  });
 }
 
 settings {
