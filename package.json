@@ -13,6 +13,8 @@
     "lint:fix": "eslint . --fix",
     "test:pades:pkcs7": "node tests/pades-pkcs7.test.js",
     "test:pades:pdf": "node tests/pades-pdf-placeholder.test.js",
+    "verify:fixtures": "node scripts/make-verification-fixtures.js",
+    "verify:scenarios": "node scripts/run-verification-scenarios.js",
     "cleanup:submissions-letters": "node scripts/cleanup-submissions-letters.js"
   },
   "keywords": [],
@@ -22,6 +24,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "@signpdf/placeholder-pdf-lib": "^3.3.0",
     "@signpdf/placeholder-plain": "^3.3.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",

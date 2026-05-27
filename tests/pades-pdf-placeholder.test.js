@@ -13,7 +13,7 @@ const sampleHtml = `
 
 try {
   const rawPdf = await pdfService.renderToPdf(sampleHtml);
-  const withPlaceholder = pdfService.addByteRangePlaceholder(rawPdf);
+  const withPlaceholder = await pdfService.addByteRangePlaceholder(rawPdf);
   const extracted = pdfService.extractByteRange(withPlaceholder);
   const hash1 = pdfService.computeByteRangeHash(withPlaceholder, extracted.byteRange);
 

@@ -11,3 +11,6 @@ AGENTS.md
 /uploads
 serviceAccountKey.json
 /api-service-kelurahan-talete-satu-docs
+/tmp-verify
+/scripts/make-verification-fixtures.js
+/scripts/run-verification-scenarios.js

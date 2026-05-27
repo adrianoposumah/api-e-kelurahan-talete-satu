@@ -104,7 +104,7 @@ class SigningService {
     });
     const html = await templateService.renderTemplate(submission.type, templateData);
     const { pdfBuffer: rawPdfBuffer } = await pdfService.renderHtmlToPdf({ html, verificationUrl });
-    const pdfWithPlaceholder = pdfService.addByteRangePlaceholder(rawPdfBuffer);
+    const pdfWithPlaceholder = await pdfService.addByteRangePlaceholder(rawPdfBuffer);
     const { byteRange } = pdfService.extractByteRange(pdfWithPlaceholder);
     const byteRangeHash = pdfService.computeByteRangeHash(pdfWithPlaceholder, byteRange);
     const certObj = forge.pki.certificateFromPem(keyRecord.certificatePem);

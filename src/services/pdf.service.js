@@ -1,8 +1,9 @@
 import crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import QRCode from 'qrcode';
-import { plainAddPlaceholder } from '@signpdf/placeholder-plain';
+import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
 import { SUBFILTER_ETSI_CADES_DETACHED } from '@signpdf/utils';
+import { PDFDocument, PDFHexString } from 'pdf-lib';
 import { writeFile, mkdir, readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -165,22 +166,35 @@ class PdfService {
    * The ByteRange placeholder is immediately resolved so callers can hash the
    * exact bytes that mobile must sign.
    *
+   * Uses @signpdf/placeholder-pdf-lib (parse-and-serialize via pdf-lib) instead
+   * of placeholder-plain. The plain helper is documented as "very fragile" and
+   * "supports only PDF versions <=1.3" — Skia/headless Chrome emits 1.4, and
+   * the resulting incremental-update PDFs are silently rejected by Adobe
+   * Acrobat. The pdf-lib backend produces a cleanly re-serialized single-rev
+   * PDF that Acrobat accepts.
+   *
    * @param {Buffer|Uint8Array} pdfBuffer
-   * @returns {Buffer}
+   * @returns {Promise<Buffer>}
    */
-  addByteRangePlaceholder(pdfBuffer) {
-    const withPlaceholder = plainAddPlaceholder({
-      pdfBuffer: Buffer.from(pdfBuffer),
+  async addByteRangePlaceholder(pdfBuffer) {
+    const pdfDoc = await PDFDocument.load(Buffer.from(pdfBuffer), { updateMetadata: false });
+
+    pdflibAddPlaceholder({
+      pdfDoc,
       reason: 'Persetujuan Surat Elektronik Kelurahan Talete Satu',
       contactInfo: 'Kelurahan Talete Satu',
       name: 'Lurah Talete Satu',
       location: 'Tomohon, Sulawesi Utara',
       signatureLength: PADES_PLACEHOLDER_BYTES,
       subFilter: SUBFILTER_ETSI_CADES_DETACHED,
-      widgetRect: [0, 0, 0, 0],
+      widgetRect: [50, 50, 51, 51],
       appName: 'e-Kelurahan Talete Satu',
     });
 
+    this.ensureTrailerId(pdfDoc);
+
+    const savedBytes = await pdfDoc.save({ useObjectStreams: false });
+    const withPlaceholder = Buffer.from(savedBytes);
     const contents = this.findContentsHexRange(withPlaceholder);
     const contentsStart = contents.contentsHexOffset - 1;
     const contentsEnd = contents.contentsHexOffset + contents.contentsHexLength + 1;
@@ -199,6 +213,92 @@ class PdfService {
     const output = Buffer.from(withPlaceholder);
     output.write(replacement.padEnd(match[0].length, ' '), match.index, 'latin1');
     return output;
+  }
+
+  /**
+   * Ensure the document trailer has an /ID entry. PDF 1.4+ requires /ID for
+   * signed documents (PDF 32000-1 7.5.5). Adobe Acrobat is known to ignore or
+   * mishandle the signature panel for trailers missing /ID. pdf-lib does not
+   * auto-populate this, so we set both array entries to the same fresh random
+   * hex string before save().
+   *
+   * @param {import('pdf-lib').PDFDocument} pdfDoc
+   */
+  ensureTrailerId(pdfDoc) {
+    if (pdfDoc.context.trailerInfo?.ID) return;
+    const id = PDFHexString.of(crypto.randomBytes(16).toString('hex'));
+    pdfDoc.context.trailerInfo = {
+      ...pdfDoc.context.trailerInfo,
+      ID: pdfDoc.context.obj([id, id]),
+    };
+  }
+
+  /**
+   * Bump the PDF version header from %PDF-1.X to %PDF-1.7 in place.
+   * PAdES Baseline B-B (SubFilter ETSI.CAdES.detached) is defined under
+   * PDF 1.7 / ISO 32000-1. Skia/headless Chrome emits %PDF-1.4, so Adobe
+   * Acrobat may treat the signature as belonging to an unknown subfilter
+   * and silently hide the signature panel. The header is exactly 8 bytes
+   * ('%PDF-X.Y') so we can patch in place without shifting any offsets.
+   *
+   * @param {Buffer} pdfBuffer
+   * @returns {Buffer}
+   */
+  bumpPdfVersionForPades(pdfBuffer) {
+    const buf = Buffer.from(pdfBuffer);
+    const head = buf.subarray(0, 8).toString('latin1');
+    if (!/^%PDF-\d\.\d$/.test(head)) return buf;
+    if (head === '%PDF-1.7') return buf;
+    buf.write('%PDF-1.7', 0, 'latin1');
+    return buf;
+  }
+
+  /**
+   * Patch off-by-one in startxref produced by @signpdf/placeholder-plain v3.3.x.
+   * The library appends a stray '\n' between the last endobj and the xref keyword
+   * but writes startxref = pdfLengthBeforeTrailer, so the value points to that
+   * '\n' instead of 'x'. Acrobat (strict) treats the incremental update as
+   * unreadable and silently falls back to the unsigned base PDF, hiding the
+   * signature panel. pdf.js and most online tools are more lenient.
+   * Issue tracked at https://github.com/vbuch/node-signpdf/issues
+   *
+   * Strategy: locate the actual byte offset of the final 'xref' keyword and
+   * rewrite the startxref value to match. Length-preserving when possible.
+   *
+   * @param {Buffer} pdfBuffer
+   * @returns {Buffer}
+   */
+  fixSignpdfStartxrefOffByOne(pdfBuffer) {
+    const buf = Buffer.from(pdfBuffer);
+    const text = buf.toString('latin1');
+    const tailMatch = text.match(/startxref\s*\n(\d+)\s*\n%%EOF\s*$/);
+    if (!tailMatch) return buf;
+
+    let actualXrefPos = -1;
+    let cursor = text.lastIndexOf('xref');
+    while (cursor !== -1) {
+      const isStartxref = cursor >= 5 && text.slice(cursor - 5, cursor) === 'start';
+      if (!isStartxref) {
+        actualXrefPos = cursor;
+        break;
+      }
+      cursor = text.lastIndexOf('xref', cursor - 1);
+    }
+
+    const declared = parseInt(tailMatch[1], 10);
+    if (actualXrefPos === -1 || actualXrefPos === declared) return buf;
+
+    const newValue = String(actualXrefPos);
+    const valueStart = tailMatch.index + tailMatch[0].indexOf(tailMatch[1]);
+
+    if (newValue.length === tailMatch[1].length) {
+      buf.write(newValue, valueStart, 'latin1');
+      return buf;
+    }
+
+    const head = buf.subarray(0, tailMatch.index);
+    const newTail = Buffer.from(`startxref\n${newValue}\n%%EOF\n`, 'latin1');
+    return Buffer.concat([head, newTail]);
   }
 
   findContentsHexRange(pdfBuffer) {
