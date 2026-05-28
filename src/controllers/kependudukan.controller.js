@@ -67,6 +67,23 @@ class KependudukanController {
   }
 
   /**
+   * GET /data-kependudukan/masked - Get masked kependudukan data
+   */
+  async getMaskedKependudukan(req, res, next) {
+    try {
+      const { nik } = req.query;
+
+      const data = await kependudukanService.getMaskedKependudukan({ nik });
+
+      res.json({
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /data-kependudukan/:nik - Get data kependudukan by NIK
    */
   async getByNik(req, res, next) {

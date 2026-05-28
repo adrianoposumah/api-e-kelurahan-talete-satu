@@ -40,6 +40,9 @@ const uploadBatchXlsx = (req, res, next) => {
   });
 };
 
+// Authenticated users can access masked NIK and nama only
+router.get('/masked', authMiddleware, kependudukanController.getMaskedKependudukan.bind(kependudukanController));
+
 // Only staff, admin, lurah, and sekertaris can access this resource
 router.use(authMiddleware, requireRole('staff', 'admin', 'lurah', 'sekertaris'));
 

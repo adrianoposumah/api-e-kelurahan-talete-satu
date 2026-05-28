@@ -50,6 +50,40 @@ class ValidateController {
   }
 
   /**
+   * POST /validate-requests/submit-data - Submit new kependudukan data for validation
+   */
+  async submitData(req, res, next) {
+    try {
+      const validateRequest = await validateService.submitData(req.user.userId, req.body);
+
+      res.status(201).json({
+        message: 'Data kependudukan berhasil diajukan untuk validasi',
+        data: formatValidateRequestResponse(validateRequest),
+      });
+    } catch (error) {
+      if (error.code === 'BAD_REQUEST') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      if (error.code === 'NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+        });
+      }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
    * GET /validate-requests/me - Get current user's validation requests
    */
   async getMyRequests(req, res, next) {

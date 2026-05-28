@@ -91,7 +91,9 @@ export const formatKependudukanManagementResponse = (kependudukan) => ({
 export const formatValidateRequestResponse = (request) => ({
   id: request.id.toString(),
   user_id: request.userId.toString(),
-  nik: request.nik,
+  nik: request.nik || request.submittedData?.nik || null,
+  request_type: request.requestType,
+  submitted_data: request.submittedData || undefined,
   status: request.status,
   admin_notes: request.adminNotes,
   processed_by: request.processedBy?.toString() || null,

@@ -161,11 +161,18 @@ enum ValidateRequestStatus {
   rejected
 }
 
+enum ValidateRequestType {
+  existing_data
+  submitted_data
+}
+
 // Validate request table
 model ValidateRequest {
   id              BigInt               @id @default(autoincrement()) @db.BigInt
   userId          BigInt               @map("user_id") @db.BigInt
-  nik             String               @db.Char(16)
+  nik             String?              @db.Char(16)
+  requestType     ValidateRequestType  @default(existing_data) @map("request_type")
+  submittedData   Json?                @map("submitted_data")
   status          ValidateRequestStatus @default(pending)
   adminNotes      String?              @map("admin_notes") @db.Text
   processedBy     BigInt?              @map("processed_by") @db.BigInt
@@ -176,7 +183,7 @@ model ValidateRequest {
   // Relations
   user            User                 @relation("UserValidateRequests", fields: [userId], references: [id], onDelete: Cascade)
   admin           User?                @relation("AdminProcessedRequests", fields: [processedBy], references: [id])
-  kependudukan    DataKependudukan     @relation(fields: [nik], references: [nik])
+  kependudukan    DataKependudukan?    @relation(fields: [nik], references: [nik])
 
   @@map("validate_requests")
 }

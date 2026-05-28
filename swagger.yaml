@@ -283,6 +283,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /validate-requests/submit-data:
+    post:
+      tags: [Validate]
+      summary: Ajukan data kependudukan baru untuk validasi
+      description: User mengirim data kependudukan lengkap. Jika NIK sudah ada di data_kependudukan, field lain diabaikan dan request diproses sebagai validasi NIK existing. Jika NIK belum ada, data baru masuk ke data_kependudukan hanya setelah admin menyetujui permintaan validasi.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KependudukanCreateRequest'
+      responses:
+        '201':
+          description: Data kependudukan berhasil diajukan untuk validasi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Data kependudukan berhasil diajukan untuk validasi
+                  data:
+                    $ref: '#/components/schemas/ValidateRequest'
+        '400':
+          description: Data tidak valid atau user sudah tervalidasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User atau lingkungan tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: NIK sudah digunakan oleh user lain, user sudah memiliki permintaan pending, atau NIK sedang diajukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /validate-requests/me:
     get:
       tags: [Validate]
@@ -310,6 +361,37 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   # ==================== KEPENDUDUKAN ROUTES ====================
+  /data-kependudukan/masked:
+    get:
+      tags: [Kependudukan]
+      summary: Get data kependudukan termasking
+      description: Mengambil daftar maksimal 10 data kependudukan termasking berdasarkan awalan NIK. Dapat diakses semua user yang sudah login.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: nik
+          schema:
+            type: string
+          description: Pencarian berdasarkan beberapa karakter awal NIK
+      responses:
+        '200':
+          description: List maksimal 10 data kependudukan termasking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KependudukanMaskedListResponse'
+              example:
+                data:
+                  - nik: '71720XXXXXXXXXXX'
+                    nama: 'BXXX SXXXXXX'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /data-kependudukan:
     get:
       tags: [Kependudukan]
@@ -1403,6 +1485,26 @@ components:
         pagination:
           $ref: '#/components/schemas/Pagination'
 
+    KependudukanMasked:
+      type: object
+      properties:
+        nik:
+          type: string
+          description: Lima karakter awal NIK, sisanya diganti X sesuai jumlah karakter yang disembunyikan
+          example: '71720XXXXXXXXXXX'
+        nama:
+          type: string
+          description: Huruf awal tiap kata pada nama, sisanya diganti X sesuai jumlah karakter yang disembunyikan
+          example: 'BXXX SXXXXXX'
+
+    KependudukanMaskedListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KependudukanMasked'
+
     KependudukanMutationResponse:
       type: object
       properties:
@@ -1605,7 +1707,18 @@ components:
         nik:
           type: string
           description: NIK yang diajukan untuk validasi
+          nullable: true
           example: '1234567890123456'
+        request_type:
+          type: string
+          enum: [existing_data, submitted_data]
+          description: Jenis permintaan validasi
+          example: submitted_data
+        submitted_data:
+          allOf:
+            - $ref: '#/components/schemas/KependudukanCreateRequest'
+          nullable: true
+          description: Data kependudukan yang diajukan user, terisi untuk request_type submitted_data
         status:
           type: string
           enum: [pending, approved, rejected]

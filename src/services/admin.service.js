@@ -1,5 +1,28 @@
 import prisma from '../config/prisma.js';
 
+const toNullableString = (value) => (value === undefined || value === null || value === '' ? null : String(value));
+
+const buildKependudukanCreateData = (submittedData) => ({
+  nik: submittedData.nik,
+  nama: submittedData.nama,
+  tempatLahir: submittedData.tempat_lahir,
+  tanggalLahir: new Date(submittedData.tanggal_lahir),
+  jenisKelamin: submittedData.jenis_kelamin,
+  golonganDarah: submittedData.golongan_darah || null,
+  alamat: submittedData.alamat,
+  rt: submittedData.rt || null,
+  rw: submittedData.rw || null,
+  lingkunganId: submittedData.lingkungan_id ? BigInt(submittedData.lingkungan_id) : null,
+  kelurahan: submittedData.kelurahan,
+  kecamatan: submittedData.kecamatan,
+  kabupatenKota: submittedData.kabupaten_kota,
+  provinsi: submittedData.provinsi,
+  statusKawin: submittedData.status_kawin,
+  agama: submittedData.agama,
+  pekerjaan: submittedData.pekerjaan,
+  kewarganegaraan: toNullableString(submittedData.kewarganegaraan) || 'WNI',
+});
+
 /**
  * Admin Service - Handles admin-related business logic
  */
@@ -259,17 +282,65 @@ class AdminService {
       throw error;
     }
 
-    // Use transaction to update both request and user (if approved)
+    // Use transaction to update request, create submitted data if needed,
+    // and validate the user if approved.
     const result = await prisma.$transaction(async (tx) => {
-      // Update the validation request
+      const updateData = {
+        status,
+        adminNotes,
+        processedBy: BigInt(adminId),
+        processedAt: new Date(),
+      };
+      let approvedNik = existingRequest.nik;
+
+      if (status === 'approved' && existingRequest.requestType === 'submitted_data') {
+        const submittedData = existingRequest.submittedData;
+
+        if (!submittedData || !submittedData.nik) {
+          const error = new Error('Data kependudukan yang diajukan tidak lengkap');
+          error.code = 'BAD_REQUEST';
+          throw error;
+        }
+
+        const existingData = await tx.dataKependudukan.findUnique({
+          where: { nik: submittedData.nik },
+        });
+
+        if (existingData) {
+          const error = new Error('Data kependudukan dengan NIK tersebut sudah ada');
+          error.code = 'CONFLICT';
+          throw error;
+        }
+
+        if (submittedData.lingkungan_id) {
+          const lingkungan = await tx.lingkungan.findUnique({
+            where: { id: BigInt(submittedData.lingkungan_id) },
+          });
+
+          if (!lingkungan) {
+            const error = new Error('Lingkungan tidak ditemukan');
+            error.code = 'NOT_FOUND';
+            throw error;
+          }
+        }
+
+        await tx.dataKependudukan.create({
+          data: buildKependudukanCreateData(submittedData),
+        });
+
+        approvedNik = submittedData.nik;
+        updateData.nik = submittedData.nik;
+      }
+
+      if (status === 'approved' && !approvedNik) {
+        const error = new Error('NIK permintaan validasi tidak ditemukan');
+        error.code = 'BAD_REQUEST';
+        throw error;
+      }
+
       const updatedRequest = await tx.validateRequest.update({
         where: { id: BigInt(requestId) },
-        data: {
-          status,
-          adminNotes,
-          processedBy: BigInt(adminId),
-          processedAt: new Date(),
-        },
+        data: updateData,
         include: {
           user: true,
           kependudukan: true,
@@ -282,7 +353,7 @@ class AdminService {
         await tx.user.update({
           where: { id: existingRequest.userId },
           data: {
-            nik: existingRequest.nik,
+            nik: approvedNik,
             isValidate: true,
           },
         });

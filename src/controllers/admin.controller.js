@@ -106,6 +106,12 @@ class AdminController {
           message: error.message,
         });
       }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: error.message,
+        });
+      }
       next(error);
     }
   }
@@ -210,6 +216,12 @@ class AdminController {
       if (error.code === 'BAD_REQUEST') {
         return res.status(400).json({
           error: 'Bad Request',
+          message: error.message,
+        });
+      }
+      if (error.code === 'CONFLICT') {
+        return res.status(409).json({
+          error: 'Conflict',
           message: error.message,
         });
       }

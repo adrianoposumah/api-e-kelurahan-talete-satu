@@ -32,6 +32,19 @@ const parseNik = (nik) => String(nik || '').trim();
 
 const isPresent = (value) => value !== undefined && value !== null && String(value).trim() !== '';
 
+const maskNik = (nik) => {
+  const value = String(nik || '');
+  return `${value.slice(0, 5)}${'X'.repeat(Math.max(value.length - 5, 0))}`;
+};
+
+const maskNama = (nama) =>
+  String(nama || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0)}${'X'.repeat(Math.max(word.length - 1, 0))}`)
+    .join(' ');
+
 const normalizeEnumToken = (value) => {
   if (!isPresent(value)) return null;
   return String(value).trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
@@ -312,6 +325,31 @@ class KependudukanService {
         total_pages: Math.ceil(total / limitNumber),
       },
     };
+  }
+
+  /**
+   * Get masked kependudukan data for authenticated users
+   * @param {object} options - Query options
+   * @returns {Promise<array>} Masked data list
+   */
+  async getMaskedKependudukan({ nik }) {
+    const parsedNik = parseNik(nik);
+    const where = parsedNik ? { nik: { startsWith: parsedNik } } : {};
+
+    const data = await prisma.dataKependudukan.findMany({
+      where,
+      take: 10,
+      orderBy: { nama: 'asc' },
+      select: {
+        nik: true,
+        nama: true,
+      },
+    });
+
+    return data.map((item) => ({
+      nik: maskNik(item.nik),
+      nama: maskNama(item.nama),
+    }));
   }
 
   /**
