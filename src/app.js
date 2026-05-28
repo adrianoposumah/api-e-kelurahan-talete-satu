@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import * as Sentry from '@sentry/node';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -79,12 +80,32 @@ app.use('/v1/keys', keyRoutes);
 app.use('/v1/verify', verificationRoutes);
 app.use('/verify', verificationRoutes);
 app.use('/v1/notifications', notificationRoutes);
+
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/debug-sentry', function mainHandler(_req, _res) {
+    throw new Error('My first Sentry error!');
+  });
+}
+
+Sentry.setupExpressErrorHandler(app);
+
+Sentry.metrics.count('button_click', 1);
+Sentry.metrics.gauge('page_load_time', 150);
+Sentry.metrics.distribution('response_time', 200);
+
+Sentry.logger.info('User triggered test log', { action: 'test_log' });
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.use((err, req, res) => {
-  console.error(err.stack);
+app.use((err, _req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
+  console.error(err.stack || err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
   });

@@ -4,6 +4,7 @@ const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.en
 dotenv.config({ path: envFile });
 dotenv.config();
 
+await import('./instrument.js');
 const { default: app } = await import('./app.js');
 const { default: ensureAdmin } = await import('./scripts/ensureAdmin.js');
 const { default: signingService } = await import('./services/signing.service.js');

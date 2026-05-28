@@ -14,6 +14,7 @@ const env = {
   ROOT_CA_KEY_PASSPHRASE: process.env.ROOT_CA_KEY_PASSPHRASE,
   PDF_STORAGE_DIR: process.env.PDF_STORAGE_DIR || 'public/letters',
   PDF_DRAFT_DIR: process.env.PDF_DRAFT_DIR || 'storage/letter-drafts',
+  SENTRY_DSN: process.env.SENTRY_DSN,
 };
 
 export default env;
