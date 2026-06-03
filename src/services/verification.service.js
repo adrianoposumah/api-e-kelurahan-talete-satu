@@ -89,14 +89,24 @@ class VerificationService {
   }
 
   async runServerCheck(verificationCode) {
+    const checks = {
+      codePresent: { pass: false, detail: null },
+      registered: { pass: null, detail: null },
+      notRevoked: { pass: null, detail: null },
+      notExpired: { pass: null, detail: null },
+    };
+
     if (!verificationCode) {
+      checks.codePresent.detail = 'Verification code tidak ditemukan di PDF';
       return {
         pass: false,
         status: 'not_found',
         reason: 'Verification code tidak ditemukan di PDF',
         issuedLetter: null,
+        checks,
       };
     }
+    checks.codePresent = { pass: true, detail: `Kode verifikasi terbaca: ${verificationCode}` };
 
     const issuedLetter = await prisma.issuedLetter.findUnique({
       where: { verificationCode },
@@ -107,95 +117,145 @@ class VerificationService {
     });
 
     if (!issuedLetter) {
-      return { pass: false, status: 'not_found', reason: 'Letter code not found in records', issuedLetter: null };
+      checks.registered.detail = 'Letter code not found in records';
+      return { pass: false, status: 'not_found', reason: 'Letter code not found in records', issuedLetter: null, checks };
     }
-    if (issuedLetter.isRevoked) {
-      return { pass: false, status: 'revoked', reason: `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`, issuedLetter };
-    }
-    if (issuedLetter.expiresAt && new Date() > issuedLetter.expiresAt) {
-      return { pass: false, status: 'expired', reason: `Letter expired on ${issuedLetter.expiresAt.toISOString()}`, issuedLetter };
-    }
+    checks.registered = { pass: true, detail: `Surat terdaftar dengan nomor ${issuedLetter.letterNumber}` };
 
-    return { pass: true, status: 'pass', reason: 'Letter found in records', issuedLetter };
+    if (issuedLetter.isRevoked) {
+      const reason = `Letter has been revoked: ${issuedLetter.revokedReason || 'No reason provided'}`;
+      checks.notRevoked = { pass: false, detail: reason };
+      return { pass: false, status: 'revoked', reason, issuedLetter, checks };
+    }
+    checks.notRevoked = { pass: true, detail: 'Surat tidak berstatus dicabut' };
+
+    if (issuedLetter.expiresAt && new Date() > issuedLetter.expiresAt) {
+      const reason = `Letter expired on ${issuedLetter.expiresAt.toISOString()}`;
+      checks.notExpired = { pass: false, detail: reason };
+      return { pass: false, status: 'expired', reason, issuedLetter, checks };
+    }
+    checks.notExpired = {
+      pass: true,
+      detail: issuedLetter.expiresAt ? `Berlaku sampai ${issuedLetter.expiresAt.toISOString()}` : 'Surat tidak memiliki masa kedaluwarsa',
+    };
+
+    return { pass: true, status: 'pass', reason: 'Letter found in records', issuedLetter, checks };
   }
 
-  async runPadesCheck(pdfBuffer, issuedLetter) {
+  async runCryptoCheck(pdfBuffer, issuedLetter) {
+    const checks = {
+      contentIntegrity: { pass: null, detail: null },
+      signature: { pass: null, detail: null },
+      certChain: { pass: null, detail: null },
+      signerMatch: { pass: null, detail: null },
+      keyStatus: { pass: null, detail: null },
+      keyValidity: { pass: null, detail: null },
+    };
+
     try {
       const { byteRange, contentsHex } = pdfService.extractByteRange(pdfBuffer);
       const pkcs7 = pkcs7Service.parsePkcs7FromHex(this.trimPaddedSignatureHex(contentsHex));
+      const signerCommonName = pkcs7.signerCommonName || null;
       const computedHash = pdfService.computeByteRangeHash(pdfBuffer, byteRange);
 
       if (!computedHash.equals(pkcs7.messageDigest)) {
-        return { pass: false, status: 'content_modified', reason: 'PDF ByteRange hash tidak cocok dengan messageDigest', signerCommonName: pkcs7.signerCommonName || null };
+        checks.contentIntegrity = { pass: false, detail: 'PDF ByteRange hash tidak cocok dengan messageDigest PKCS#7' };
+        return { pass: false, status: 'content_modified', reason: 'PDF ByteRange hash tidak cocok dengan messageDigest', signerCommonName, checks };
       }
+      checks.contentIntegrity = { pass: true, detail: 'Hash ByteRange dokumen cocok dengan messageDigest PKCS#7' };
 
       const signatureValid = cryptoService.verifySignatureWithCertificate(pkcs7.signedAttributesDer, pkcs7.signatureBytes, pkcs7.signerCertPem);
       if (!signatureValid) {
-        return { pass: false, status: 'signature_invalid', reason: 'PKCS#7 signature tidak valid', signerCommonName: pkcs7.signerCommonName || null };
+        checks.signature = { pass: false, detail: 'PKCS#7 signature tidak valid terhadap signed attributes' };
+        return { pass: false, status: 'signature_invalid', reason: 'PKCS#7 signature tidak valid', signerCommonName, checks };
       }
+      checks.signature = { pass: true, detail: `Signature RSA-SHA256 valid (penanda tangan: ${signerCommonName || 'tidak diketahui'})` };
 
       const chainValid = cryptoService.verifyCertChain(pkcs7.signerCertPem, caService.getRootCaPem());
       if (!chainValid) {
-        return { pass: false, status: 'untrusted', reason: 'Sertifikat penanda tangan tidak dipercaya', signerCommonName: pkcs7.signerCommonName || null };
+        checks.certChain = { pass: false, detail: 'Sertifikat penanda tangan tidak terhubung ke Root CA terpercaya' };
+        return { pass: false, status: 'untrusted', reason: 'Sertifikat penanda tangan tidak dipercaya', signerCommonName, checks };
       }
+      checks.certChain = { pass: true, detail: 'Cert chain terverifikasi sampai ke Root CA Kelurahan Talete Satu' };
 
       if (issuedLetter?.signatureKey?.fingerprint) {
         const fingerprint = cryptoService.computeCertFingerprint(pkcs7.signerCertPem);
         if (fingerprint !== issuedLetter.signatureKey.fingerprint) {
-          return { pass: false, status: 'signer_mismatch', reason: 'Signer certificate tidak cocok dengan rekaman server', signerCommonName: pkcs7.signerCommonName || null };
+          checks.signerMatch = { pass: false, detail: 'Fingerprint sertifikat penanda tangan tidak cocok dengan rekaman server' };
+          return { pass: false, status: 'signer_mismatch', reason: 'Signer certificate tidak cocok dengan rekaman server', signerCommonName, checks };
         }
+        checks.signerMatch = { pass: true, detail: `Fingerprint cocok dengan rekaman server (${fingerprint.slice(0, 16)}…)` };
+      } else {
+        checks.signerMatch = { pass: null, detail: 'Tidak ada fingerprint rekaman untuk dibandingkan' };
       }
 
       if (!issuedLetter?.signatureKey) {
-        return { pass: false, status: 'missing_key_record', reason: 'Rekaman key penanda tangan tidak ditemukan', signerCommonName: pkcs7.signerCommonName || null };
+        checks.keyStatus = { pass: false, detail: 'Rekaman key penanda tangan tidak ditemukan di server' };
+        return { pass: false, status: 'missing_key_record', reason: 'Rekaman key penanda tangan tidak ditemukan', signerCommonName, checks };
       }
+
       if (issuedLetter.signatureKey.status !== 'ACTIVE') {
         const signedAt = issuedLetter.signedAt || issuedLetter.issuedAt;
         const deactivatedAt = issuedLetter.signatureKey.deactivatedAt;
         if (signedAt && deactivatedAt && signedAt <= deactivatedAt) {
+          checks.keyStatus = {
+            pass: true,
+            detail: `Key berstatus ${issuedLetter.signatureKey.status}, tetapi surat ditandatangani sebelum key dinonaktifkan pada ${deactivatedAt.toISOString()} (grace period)`,
+          };
+          checks.keyValidity = { pass: true, detail: 'Tidak dievaluasi — diterima via grace period sebelum penonaktifan key' };
           return {
             pass: true,
             status: 'pass',
-            reason: `PAdES signature valid. Key penanda tangan saat ini berstatus ${issuedLetter.signatureKey.status}, tetapi surat ditandatangani sebelum key dinonaktifkan pada ${deactivatedAt.toISOString()}.`,
-            signerCommonName: pkcs7.signerCommonName || null,
+            reason: `Crypto-Check valid. Key penanda tangan saat ini berstatus ${issuedLetter.signatureKey.status}, tetapi surat ditandatangani sebelum key dinonaktifkan pada ${deactivatedAt.toISOString()}.`,
+            signerCommonName,
+            checks,
           };
         }
 
-        return { pass: false, status: 'revoked_key', reason: `Key penanda tangan berstatus ${issuedLetter.signatureKey.status}`, signerCommonName: pkcs7.signerCommonName || null };
+        checks.keyStatus = { pass: false, detail: `Key penanda tangan berstatus ${issuedLetter.signatureKey.status}` };
+        return { pass: false, status: 'revoked_key', reason: `Key penanda tangan berstatus ${issuedLetter.signatureKey.status}`, signerCommonName, checks };
       }
+      checks.keyStatus = { pass: true, detail: 'Key penanda tangan berstatus ACTIVE' };
+
       if (issuedLetter.signatureKey.expiresAt && new Date() > issuedLetter.signatureKey.expiresAt) {
-        return { pass: false, status: 'expired_key', reason: `Sertifikat penanda tangan expired pada ${issuedLetter.signatureKey.expiresAt.toISOString()}`, signerCommonName: pkcs7.signerCommonName || null };
+        checks.keyValidity = { pass: false, detail: `Sertifikat penanda tangan expired pada ${issuedLetter.signatureKey.expiresAt.toISOString()}` };
+        return { pass: false, status: 'expired_key', reason: `Sertifikat penanda tangan expired pada ${issuedLetter.signatureKey.expiresAt.toISOString()}`, signerCommonName, checks };
       }
+      checks.keyValidity = {
+        pass: true,
+        detail: issuedLetter.signatureKey.expiresAt ? `Sertifikat berlaku sampai ${issuedLetter.signatureKey.expiresAt.toISOString()}` : 'Sertifikat tidak memiliki masa kedaluwarsa',
+      };
 
       return {
         pass: true,
         status: 'pass',
-        reason: 'PAdES signature valid',
-        signerCommonName: pkcs7.signerCommonName || null,
+        reason: 'Crypto-Check valid',
+        signerCommonName,
+        checks,
       };
     } catch (error) {
-      return { pass: false, status: 'parse_error', reason: error.message, signerCommonName: null };
+      return { pass: false, status: 'parse_error', reason: error.message, signerCommonName: null, checks };
     }
   }
 
-  decideResult(serverResult, padesResult) {
-    if (serverResult.status === 'pass' && padesResult.pass) return { valid: true, status: 'VALID', message: 'Surat valid' };
-    if (serverResult.status === 'revoked' && padesResult.pass) return { valid: false, status: 'REVOKED', message: 'Surat telah dicabut' };
-    if (serverResult.status === 'expired' && padesResult.pass) return { valid: false, status: 'EXPIRED', message: 'Surat sudah kadaluarsa' };
-    if (serverResult.status === 'not_found' && padesResult.pass) return { valid: false, status: 'UNREGISTERED_BUT_VALID_SIGNATURE', message: 'Signature valid tetapi surat tidak terdaftar' };
-    if (serverResult.status === 'pass' && padesResult.status === 'untrusted') return { valid: false, status: 'UNTRUSTED_SIGNER', message: 'Sertifikat penanda tangan tidak dipercaya' };
-    if (serverResult.status === 'pass' && padesResult.status === 'revoked_key') return { valid: false, status: 'REVOKED_SIGNER', message: 'Key penanda tangan sudah dicabut atau tidak aktif' };
-    if (serverResult.status === 'pass' && padesResult.status === 'expired_key') return { valid: false, status: 'EXPIRED_SIGNER', message: 'Sertifikat penanda tangan sudah expired' };
-    if (serverResult.status === 'pass' && padesResult.status === 'missing_pades') {
+  decideResult(serverResult, cryptoResult) {
+    if (serverResult.status === 'pass' && cryptoResult.pass) return { valid: true, status: 'VALID', message: 'Surat valid' };
+    if (serverResult.status === 'revoked' && cryptoResult.pass) return { valid: false, status: 'REVOKED', message: 'Surat telah dicabut' };
+    if (serverResult.status === 'expired' && cryptoResult.pass) return { valid: false, status: 'EXPIRED', message: 'Surat sudah kadaluarsa' };
+    if (serverResult.status === 'not_found' && cryptoResult.pass) return { valid: false, status: 'UNREGISTERED_BUT_VALID_SIGNATURE', message: 'Signature valid tetapi surat tidak terdaftar' };
+    if (serverResult.status === 'pass' && cryptoResult.status === 'untrusted') return { valid: false, status: 'UNTRUSTED_SIGNER', message: 'Sertifikat penanda tangan tidak dipercaya' };
+    if (serverResult.status === 'pass' && cryptoResult.status === 'revoked_key') return { valid: false, status: 'REVOKED_SIGNER', message: 'Key penanda tangan sudah dicabut atau tidak aktif' };
+    if (serverResult.status === 'pass' && cryptoResult.status === 'expired_key') return { valid: false, status: 'EXPIRED_SIGNER', message: 'Sertifikat penanda tangan sudah expired' };
+    if (serverResult.status === 'pass' && cryptoResult.status === 'missing_pades') {
       return {
         valid: false,
         status: 'TAMPERED_QR_TRANSPLANT',
         message: 'Kode verifikasi terdaftar tetapi dokumen tidak memiliki signature digital. Kemungkinan QR disalin dari surat lain.',
       };
     }
-    if (serverResult.status === 'pass' && ['content_modified', 'signature_invalid', 'signer_mismatch'].includes(padesResult.status)) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
-    if (serverResult.status === 'pass' && padesResult.status === 'parse_error') return { valid: false, status: 'MALFORMED', message: 'Signature PAdES tidak dapat dibaca' };
-    if (serverResult.status === 'not_found' && padesResult.status === 'missing_pades') return { valid: false, status: 'FAKE', message: 'Surat palsu' };
+    if (serverResult.status === 'pass' && ['content_modified', 'signature_invalid', 'signer_mismatch'].includes(cryptoResult.status)) return { valid: false, status: 'TAMPERED', message: 'Surat dimodifikasi' };
+    if (serverResult.status === 'pass' && cryptoResult.status === 'parse_error') return { valid: false, status: 'MALFORMED', message: 'Signature digital tidak dapat dibaca' };
+    if (serverResult.status === 'not_found' && cryptoResult.status === 'missing_pades') return { valid: false, status: 'FAKE', message: 'Surat palsu' };
     return { valid: false, status: 'FAKE', message: 'Surat palsu' };
   }
 
@@ -203,23 +263,33 @@ class VerificationService {
     const { code: verificationCode, source: codeSource } = await this.extractVerificationCodeFromPdf(pdfBuffer);
     const serverResult = await this.runServerCheck(verificationCode);
 
-    const padesResult = this.hasPadesSignature(pdfBuffer)
-      ? await this.runPadesCheck(pdfBuffer, serverResult.issuedLetter)
+    const missingPadesChecks = {
+      contentIntegrity: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+      signature: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+      certChain: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+      signerMatch: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+      keyStatus: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+      keyValidity: { pass: null, detail: 'Tidak ada signature digital untuk diperiksa' },
+    };
+
+    const cryptoResult = this.hasPadesSignature(pdfBuffer)
+      ? await this.runCryptoCheck(pdfBuffer, serverResult.issuedLetter)
       : {
           pass: false,
           status: 'missing_pades',
-          reason: 'PDF tidak memiliki signature PAdES (/ByteRange atau ETSI.CAdES.detached tidak ditemukan)',
+          reason: 'PDF tidak memiliki signature digital (/ByteRange atau ETSI.CAdES.detached tidak ditemukan)',
           signerCommonName: null,
+          checks: missingPadesChecks,
         };
 
-    const decision = this.decideResult(serverResult, padesResult);
+    const decision = this.decideResult(serverResult, cryptoResult);
 
     this.recordVerificationAttempt({
       verificationCode,
       decision: decision.status,
       serverPass: serverResult.pass,
-      cryptoPass: padesResult.pass,
-      documentPass: padesResult.pass,
+      cryptoPass: cryptoResult.pass,
+      documentPass: cryptoResult.pass,
     }).catch(() => {});
 
     return {
@@ -231,21 +301,15 @@ class VerificationService {
         status: serverResult.status,
         reason: serverResult.reason,
         codeSource,
+        checks: serverResult.checks,
       },
       cryptoCheck: {
-        pass: padesResult.pass,
-        reason: padesResult.reason,
+        pass: cryptoResult.pass,
+        status: cryptoResult.status,
+        reason: cryptoResult.reason,
+        signerCommonName: cryptoResult.signerCommonName || null,
         keyStatus: serverResult.issuedLetter?.signatureKey?.status || null,
-      },
-      bodyCheck: {
-        pass: padesResult.pass,
-        reason: padesResult.reason,
-        skipped: padesResult.status === 'missing_pades',
-      },
-      trustCheck: {
-        pass: padesResult.pass && padesResult.status === 'pass',
-        reason: padesResult.status === 'pass' ? 'Cert chain terverifikasi ke Root CA' : padesResult.reason,
-        signerCommonName: padesResult.signerCommonName || null,
+        checks: cryptoResult.checks,
       },
       letter: serverResult.issuedLetter
         ? {
