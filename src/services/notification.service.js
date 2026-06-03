@@ -172,6 +172,91 @@ export async function sendToUser(userId, { title, body, data = {}, type = 'other
   }
 }
 
+const FCM_MULTICAST_LIMIT = 500;
+
+const chunk = (arr, size) => {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+
+export async function broadcastToAllUsers({ title, body, data = {}, type = 'announcement' }) {
+  const notificationType = parseNotificationType(type);
+
+  const users = await prisma.user.findMany({
+    where: { status: 'active' },
+    select: { id: true },
+  });
+
+  const userIds = users.map((u) => u.id);
+  if (!userIds.length) {
+    return { recipients: 0, notificationResult: { count: 0 }, pushResult: null };
+  }
+
+  const notificationResult = await prisma.notification.createMany({
+    data: userIds.map((userId) => ({
+      userId,
+      type: notificationType,
+      title,
+      body,
+      data,
+    })),
+  });
+
+  if (!admin.apps.length) {
+    return { recipients: userIds.length, notificationResult, pushResult: null };
+  }
+
+  const userTokens = await prisma.userToken.findMany({
+    where: { userId: { in: userIds }, fcmToken: { not: null } },
+    select: { fcmToken: true },
+  });
+
+  const tokens = userTokens.map((u) => u.fcmToken);
+  if (!tokens.length) {
+    return { recipients: userIds.length, notificationResult, pushResult: null };
+  }
+
+  let successCount = 0;
+  let failureCount = 0;
+  const failedTokens = [];
+
+  for (const tokenBatch of chunk(tokens, FCM_MULTICAST_LIMIT)) {
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens: tokenBatch,
+      notification: { title, body },
+      data: toPushData(data),
+      android: { priority: 'high' },
+    });
+
+    successCount += result.successCount;
+    failureCount += result.failureCount;
+
+    if (result.failureCount > 0) {
+      result.responses.forEach((resp, idx) => {
+        if (!resp.success && (resp.error.code === 'messaging/invalid-registration-token' || resp.error.code === 'messaging/registration-token-not-registered')) {
+          failedTokens.push(tokenBatch[idx]);
+        }
+      });
+    }
+  }
+
+  if (failedTokens.length > 0) {
+    await prisma.userToken.updateMany({
+      where: { fcmToken: { in: failedTokens } },
+      data: { fcmToken: null },
+    });
+  }
+
+  return {
+    recipients: userIds.length,
+    notificationResult,
+    pushResult: { successCount, failureCount, tokensSent: tokens.length },
+  };
+}
+
 export async function sendToMultiple(userIds, payload) {
   const notificationResult = await createNotifications(userIds, payload);
 

@@ -64,7 +64,12 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date(),
+    timezone: process.env.TZ || 'Asia/Makassar',
+    env: process.env.NODE_ENV,
+  });
 });
 
 // Routes

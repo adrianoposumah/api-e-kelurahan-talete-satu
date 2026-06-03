@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as controller from '../controllers/notification.controller.js';
-import { authMiddleware } from '../middleware/auth.middleware.js';
+import { authMiddleware, requireRole } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -12,5 +12,8 @@ router.patch('/:id/read', authMiddleware, controller.markNotificationAsRead);
 
 // Endpoint untuk test push notification
 router.post('/test', authMiddleware, controller.testNotification);
+
+// Admin mengirim notifikasi (broadcast) ke semua user
+router.post('/broadcast', authMiddleware, requireRole('admin'), controller.broadcastNotification);
 
 export default router;

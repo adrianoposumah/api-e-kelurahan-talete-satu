@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(npm run *)"
     ]
   }
 }

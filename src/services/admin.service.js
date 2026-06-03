@@ -1,4 +1,5 @@
 import prisma from '../config/prisma.js';
+import { sendToUser } from './notification.service.js';
 
 const toNullableString = (value) => (value === undefined || value === null || value === '' ? null : String(value));
 
@@ -360,6 +361,25 @@ class AdminService {
       }
 
       return updatedRequest;
+    });
+
+    const notifPayload =
+      status === 'approved'
+        ? {
+            title: 'Validasi Akun Diterima',
+            body: 'Akun Anda telah berhasil divalidasi. Anda sekarang dapat menggunakan layanan e-Kelurahan.',
+            type: 'other',
+            data: { info: 'validate_accepted', request_id: requestId.toString() },
+          }
+        : {
+            title: 'Validasi Akun Ditolak',
+            body: adminNotes ? `Permintaan validasi Anda ditolak. Alasan: ${adminNotes}` : 'Permintaan validasi Anda ditolak. Silakan hubungi petugas kelurahan.',
+            type: 'other',
+            data: { info: 'validate_rejected', request_id: requestId.toString() },
+          };
+
+    sendToUser(existingRequest.userId, notifPayload).catch((err) => {
+      console.error('Gagal mengirim notifikasi validasi:', err);
     });
 
     return result;

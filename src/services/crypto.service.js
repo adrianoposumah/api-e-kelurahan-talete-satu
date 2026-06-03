@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import forge from 'node-forge';
 import prisma from '../config/prisma.js';
+import { sendToUser } from './notification.service.js';
 
 /**
  * Crypto Service - PAdES/mobile-key verification and public key management.
@@ -81,7 +82,24 @@ class CryptoService {
         deactivatedAt: true,
         deactivateReason: true,
         createdAt: true,
+        lurahProfile: {
+          select: { userId: true, namaLengkap: true },
+        },
       },
+    });
+
+    sendToUser(updatedKey.lurahProfile.userId, {
+      title: 'Kunci Digital Dicabut',
+      body: reason ? `Kunci digital Anda telah dicabut. Alasan: ${reason}` : 'Kunci digital Anda telah dicabut oleh administrator.',
+      type: 'other',
+      data: {
+        info: 'key_revoked',
+        key_id: updatedKey.id.toString(),
+        fingerprint: updatedKey.fingerprint ?? '',
+        revoked_at: updatedKey.deactivatedAt?.toISOString() ?? '',
+      },
+    }).catch((err) => {
+      console.error('Gagal mengirim notifikasi pencabutan kunci:', err);
     });
 
     return {

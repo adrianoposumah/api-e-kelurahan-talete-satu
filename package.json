@@ -7,8 +7,8 @@
     "seed": "node prisma/seed.js"
   },
   "scripts": {
-    "dev": "cross-env NODE_ENV=development nodemon src/server.js",
-    "start": "cross-env NODE_ENV=production node src/server.js",
+    "dev": "cross-env NODE_ENV=development TZ=Asia/Makassar nodemon src/server.js",
+    "start": "cross-env NODE_ENV=production TZ=Asia/Makassar node src/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:pades:pkcs7": "node tests/pades-pkcs7.test.js",

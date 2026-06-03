@@ -60,6 +60,41 @@ export const markNotificationAsRead = async (req, res, next) => {
   }
 };
 
+export const broadcastNotification = async (req, res, next) => {
+  try {
+    const { title, body, data = {}, type = 'announcement' } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'title dan body wajib diisi',
+      });
+    }
+
+    const result = await notificationService.broadcastToAllUsers({ title, body, data, type });
+
+    res.json({
+      success: true,
+      message: result.pushResult
+        ? `Notifikasi dikirim ke ${result.recipients} user`
+        : `Notifikasi disimpan untuk ${result.recipients} user, namun tidak ada FCM push yang terkirim.`,
+      recipients: result.recipients,
+      notifications_created: result.notificationResult.count,
+      push_sent: Boolean(result.pushResult),
+      result: result.pushResult,
+    });
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: err.message,
+      });
+    }
+
+    next(err);
+  }
+};
+
 export const testNotification = async (req, res) => {
   try {
     const userId = req.user.userId;
