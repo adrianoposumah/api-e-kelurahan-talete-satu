@@ -48,19 +48,19 @@ Jenis surat didefinisikan secara dinamis melalui template (HTML + schema JSON), 
 
 ## Teknologi
 
-| Kategori           | Teknologi                                          |
-| ------------------ | -------------------------------------------------- |
-| Runtime            | Node.js (ES Modules)                               |
-| Framework          | Express.js v5                                      |
-| Database           | PostgreSQL                                         |
-| ORM                | Prisma v7 + `@prisma/adapter-pg`                   |
-| Autentikasi        | JWT (`jsonwebtoken`), `bcrypt`                     |
-| Tanda tangan       | RSA-4096, AES-256-GCM, `@signpdf`, `pdf-lib`       |
-| PDF & QR           | Puppeteer, `qrcode`, `jsqr`, `pdf-to-img`, `sharp` |
-| Notifikasi         | Firebase Admin SDK (FCM)                           |
-| Dokumentasi        | Swagger UI (OpenAPI)                               |
-| Monitoring         | Sentry                                             |
-| Lint               | ESLint v9                                          |
+| Kategori     | Teknologi                                          |
+| ------------ | -------------------------------------------------- |
+| Runtime      | Node.js (ES Modules)                               |
+| Framework    | Express.js v5                                      |
+| Database     | PostgreSQL                                         |
+| ORM          | Prisma v7 + `@prisma/adapter-pg`                   |
+| Autentikasi  | JWT (`jsonwebtoken`), `bcrypt`                     |
+| Tanda tangan | RSA-4096, AES-256-GCM, `@signpdf`, `pdf-lib`       |
+| PDF & QR     | Puppeteer, `qrcode`, `jsqr`, `pdf-to-img`, `sharp` |
+| Notifikasi   | Firebase Admin SDK (FCM)                           |
+| Dokumentasi  | Swagger UI (OpenAPI)                               |
+| Monitoring   | Sentry                                             |
+| Lint         | ESLint v9                                          |
 
 ---
 
@@ -195,28 +195,28 @@ ROOT_CA_KEY_PASSPHRASE=isi_passphrase_yang_kuat
 
 ### Daftar Variabel Environment
 
-| Variabel                 | Wajib | Keterangan                                                    |
-| ------------------------ | :---: | ------------------------------------------------------------- |
-| `PORT`                   |  ✓    | Port server (default `3000`)                                  |
-| `BASE_URL`               |  ✓    | URL dasar untuk membangun URL PDF/aset & link QR verifikasi   |
-| `TZ`                     |  ✓    | Zona waktu (`Asia/Makassar`)                                  |
-| `DATABASE_URL`           |  ✓    | Connection string PostgreSQL                                  |
-| `JWT_SECRET`             |  ✓    | Secret untuk access token                                     |
-| `JWT_EXPIRES_IN`         |  ✓    | Masa berlaku access token (mis. `7d`)                         |
-| `JWT_REFRESH_SECRET`     |  ✓    | Secret untuk refresh token                                    |
-| `JWT_REFRESH_EXPIRES_IN` |  ✓    | Masa berlaku refresh token (mis. `30d`)                       |
-| `VERIFICATION_URL`       |       | URL frontend verifikasi publik (di-embed di QR code)          |
-| `ADMIN_DASHBOARD_URL`    |       | Origin dashboard admin (untuk allowlist CORS)                 |
-| `ROOT_CA_KEY_PASSPHRASE` |  ✓    | Passphrase untuk kunci Root CA                                |
+| Variabel                 | Wajib | Keterangan                                                          |
+| ------------------------ | :---: | ------------------------------------------------------------------- |
+| `PORT`                   |   ✓   | Port server (default `3000`)                                        |
+| `BASE_URL`               |   ✓   | URL dasar untuk membangun URL PDF/aset & link QR verifikasi         |
+| `TZ`                     |   ✓   | Zona waktu (`Asia/Makassar`)                                        |
+| `DATABASE_URL`           |   ✓   | Connection string PostgreSQL                                        |
+| `JWT_SECRET`             |   ✓   | Secret untuk access token                                           |
+| `JWT_EXPIRES_IN`         |   ✓   | Masa berlaku access token (mis. `7d`)                               |
+| `JWT_REFRESH_SECRET`     |   ✓   | Secret untuk refresh token                                          |
+| `JWT_REFRESH_EXPIRES_IN` |   ✓   | Masa berlaku refresh token (mis. `30d`)                             |
+| `VERIFICATION_URL`       |       | URL frontend verifikasi publik (di-embed di QR code)                |
+| `ADMIN_DASHBOARD_URL`    |       | Origin dashboard admin (untuk allowlist CORS)                       |
+| `ROOT_CA_KEY_PASSPHRASE` |   ✓   | Passphrase untuk kunci Root CA                                      |
 | `ROOT_CA_CERT_PATH`      |       | Path sertifikat Root CA (default `secure-storage/root-ca-cert.pem`) |
-| `ROOT_CA_KEY_PATH`       |       | Path kunci Root CA (default `secure-storage/root-ca-key.pem`) |
-| `KELURAHAN_CODE`         |       | Kode kelurahan (default `2009`)                               |
-| `PDF_STORAGE_DIR`        |       | Direktori penyimpanan PDF (default `public/letters`)          |
-| `PDF_DRAFT_DIR`          |       | Direktori draft PDF (default `storage/letter-drafts`)         |
-| `SENTRY_DSN`             |       | DSN Sentry untuk error tracking                               |
-| `ADMIN_NOHP`             |       | No. HP admin (seeding produksi)                               |
-| `ADMIN_PASSWORD`         |       | Password admin (seeding produksi)                             |
-| `ADMIN_NAME`             |       | Nama admin (opsional, default `Administrator`)                |
+| `ROOT_CA_KEY_PATH`       |       | Path kunci Root CA (default `secure-storage/root-ca-key.pem`)       |
+| `KELURAHAN_CODE`         |       | Kode kelurahan (default `2009`)                                     |
+| `PDF_STORAGE_DIR`        |       | Direktori penyimpanan PDF (default `public/letters`)                |
+| `PDF_DRAFT_DIR`          |       | Direktori draft PDF (default `storage/letter-drafts`)               |
+| `SENTRY_DSN`             |       | DSN Sentry untuk error tracking                                     |
+| `ADMIN_NOHP`             |       | No. HP admin (seeding produksi)                                     |
+| `ADMIN_PASSWORD`         |       | Password admin (seeding produksi)                                   |
+| `ADMIN_NAME`             |       | Nama admin (opsional, default `Administrator`)                      |
 
 > **Firebase Admin SDK** membaca dari `serviceAccountKey.json` (gitignored) atau variabel env setara untuk notifikasi FCM.
 
@@ -253,21 +253,21 @@ curl http://localhost:5000/health
 
 Seluruh endpoint API berada di bawah prefix `/v1`. Grup endpoint utama:
 
-| Prefix                  | Fungsi                               |
-| ----------------------- | ------------------------------------ |
-| `/v1/auth`              | Autentikasi (login, register, token) |
-| `/v1/users`             | Manajemen pengguna                   |
-| `/v1/validate-requests` | Validasi permohonan akun             |
-| `/v1/admin`             | Operasi admin                        |
-| `/v1/lingkungan`        | Data lingkungan/neighborhood         |
-| `/v1/data-kependudukan` | Registry kependudukan (NIK)          |
-| `/v1/submissions`       | Pengajuan surat                      |
-| `/v1/letters`           | Penerbitan & pengelolaan surat       |
-| `/v1/keys`              | Manajemen kunci Lurah                |
-| `/v1/verify` (`/verify`)| Verifikasi publik surat              |
-| `/v1/notifications`     | Notifikasi (FCM)                     |
-| `/v1/arsip`             | Arsip surat                          |
-| `/v1/dashboard`         | Statistik dashboard                  |
+| Prefix                   | Fungsi                               |
+| ------------------------ | ------------------------------------ |
+| `/v1/auth`               | Autentikasi (login, register, token) |
+| `/v1/users`              | Manajemen pengguna                   |
+| `/v1/validate-requests`  | Validasi permohonan akun             |
+| `/v1/admin`              | Operasi admin                        |
+| `/v1/lingkungan`         | Data lingkungan/neighborhood         |
+| `/v1/data-kependudukan`  | Registry kependudukan (NIK)          |
+| `/v1/submissions`        | Pengajuan surat                      |
+| `/v1/letters`            | Penerbitan & pengelolaan surat       |
+| `/v1/keys`               | Manajemen kunci Lurah                |
+| `/v1/verify` (`/verify`) | Verifikasi publik surat              |
+| `/v1/notifications`      | Notifikasi (FCM)                     |
+| `/v1/arsip`              | Arsip surat                          |
+| `/v1/dashboard`          | Statistik dashboard                  |
 
 ---
 
@@ -333,9 +333,3 @@ api-e-kelurahan-talete-satu/
 2. Tambahkan `schema.json` (field wajib, file upload, MIME constraint) dan `template.html`.
 3. Tambahkan entri pada enum `SubmissionType` di `prisma/schema.prisma`.
 4. Jalankan migrasi: `npx prisma migrate dev --name add_<nama_surat>`.
-
----
-
-## Lisensi
-
-ISC
