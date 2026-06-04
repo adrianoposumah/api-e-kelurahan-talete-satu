@@ -402,3 +402,101 @@ export const formatNotificationResponse = (notification) => ({
   created_at: notification.createdAt,
   updated_at: notification.updatedAt,
 });
+
+// ==================== ARSIP SURAT FORMATTERS ====================
+
+const buildAbsoluteUrl = (relativeUrl, baseUrl) => {
+  if (!baseUrl) {
+    return relativeUrl;
+  }
+
+  return new URL(relativeUrl, baseUrl).toString();
+};
+
+/**
+ * Format a manual arsip surat entry for API response.
+ * @param {object} arsip - ArsipSurat record from database
+ * @param {object} [options]
+ * @param {string} [options.baseUrl] - Base URL for building the attachment link
+ * @returns {object} Formatted arsip object
+ */
+export const formatArsipResponse = (arsip, options = {}) => {
+  const baseUrl = options.baseUrl || '';
+  const fileUrl = arsip.filePath ? buildAbsoluteUrl(`/v1/arsip/${arsip.id.toString()}/file`, baseUrl) : null;
+
+  return {
+    id: arsip.id.toString(),
+    direction: arsip.direction,
+    nomor_surat: arsip.nomorSurat,
+    tanggal_surat: arsip.tanggalSurat,
+    tanggal_diterima: arsip.tanggalDiterima,
+    pihak: arsip.pihak,
+    perihal: arsip.perihal,
+    sifat: arsip.sifat,
+    keterangan: arsip.keterangan,
+    file_url: fileUrl,
+    download_url: fileUrl ? `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}download=true` : null,
+    file_type: arsip.fileType,
+    created_by: arsip.createdBy
+      ? {
+          id: arsip.createdBy.id.toString(),
+          nama: arsip.createdBy.nama,
+        }
+      : undefined,
+    created_at: arsip.createdAt,
+    updated_at: arsip.updatedAt,
+  };
+};
+
+/**
+ * Format a unified log entry (manual arsip OR system-issued letter) into a
+ * common shape tagged with `source`.
+ * @param {{ source: 'manual' | 'system', record: object }} entry
+ * @param {object} [options]
+ * @param {string} [options.baseUrl] - Base URL for building file links
+ * @returns {object} Normalized log entry
+ */
+export const formatArsipLogEntry = (entry, options = {}) => {
+  const baseUrl = options.baseUrl || '';
+  const { source, record } = entry;
+
+  if (source === 'system') {
+    const fileUrl = record.pdfPath ? buildAbsoluteUrl(`/${record.pdfPath}`, baseUrl) : null;
+
+    return {
+      source: 'system',
+      id: record.id.toString(),
+      direction: 'keluar',
+      nomor_surat: record.letterNumber,
+      tanggal_surat: record.issuedAt,
+      tanggal_diterima: null,
+      pihak: 'Warga / Pemohon',
+      perihal: record.type,
+      sifat: null,
+      keterangan: record.keterangan || null,
+      file_url: fileUrl,
+      verification_code: record.verificationCode,
+      is_revoked: Boolean(record.isRevoked),
+      created_at: record.issuedAt,
+    };
+  }
+
+  const fileUrl = record.filePath ? buildAbsoluteUrl(`/v1/arsip/${record.id.toString()}/file`, baseUrl) : null;
+
+  return {
+    source: 'manual',
+    id: record.id.toString(),
+    direction: record.direction,
+    nomor_surat: record.nomorSurat,
+    tanggal_surat: record.tanggalSurat,
+    tanggal_diterima: record.tanggalDiterima,
+    pihak: record.pihak,
+    perihal: record.perihal,
+    sifat: record.sifat,
+    keterangan: record.keterangan,
+    file_url: fileUrl,
+    verification_code: null,
+    is_revoked: false,
+    created_at: record.createdAt,
+  };
+};

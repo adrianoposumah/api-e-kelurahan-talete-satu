@@ -66,6 +66,7 @@ model User {
   lurahProfiles  LurahProfile[]
   sekertarisProfile SekertarisProfile?
   notifications  Notification[]
+  arsipSurat     ArsipSurat[]
 
   @@map("users")
 }
@@ -487,4 +488,46 @@ model Notification {
   @@index([type])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ==================== ARSIP SURAT (External / Manual Letter Archive) ====================
+// Standalone module for letters created/received OUTSIDE the citizen submission flow
+// (surat masuk / surat keluar). The unified log view also reads IssuedLetter at query
+// time, so this table never duplicates system-generated letters.
+
+enum ArsipDirection {
+  masuk
+  keluar
+}
+
+enum ArsipSifat {
+  biasa
+  penting
+  segera
+  rahasia
+}
+
+model ArsipSurat {
+  id              BigInt         @id @default(autoincrement()) @db.BigInt
+  direction       ArsipDirection
+  nomorSurat      String         @map("nomor_surat") @db.VarChar(100)
+  tanggalSurat    DateTime       @map("tanggal_surat") @db.Date
+  tanggalDiterima DateTime?      @map("tanggal_diterima") @db.Date
+  pihak           String         @db.VarChar(150)
+  perihal         String         @db.VarChar(255)
+  sifat           ArsipSifat     @default(biasa)
+  keterangan      String?        @db.Text
+  filePath        String?        @map("file_path") @db.VarChar(255)
+  fileType        String?        @map("file_type") @db.VarChar(50)
+  createdById     BigInt         @map("created_by") @db.BigInt
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy       User           @relation(fields: [createdById], references: [id])
+
+  @@index([direction])
+  @@index([tanggalSurat])
+  @@index([createdById])
+  @@map("arsip_surat")
 }

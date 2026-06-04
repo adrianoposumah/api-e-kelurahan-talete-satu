@@ -21,6 +21,10 @@ tags:
     description: Endpoints khusus admin untuk manajemen user dan validasi
   - name: Kependudukan
     description: Endpoints untuk manajemen data kependudukan (staff/admin/lurah/sekertaris)
+  - name: Arsip
+    description: Administrasi surat masuk/keluar eksternal dan log arsip terpadu (staff/admin)
+  - name: Dashboard
+    description: Statistik agregat untuk home dashboard (admin/staff)
 
 paths:
   # ==================== AUTH ROUTES ====================
@@ -1185,6 +1189,407 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # ==================== ARSIP SURAT ROUTES ====================
+  /arsip:
+    get:
+      tags: [Arsip]
+      summary: List arsip surat manual (surat masuk/keluar)
+      description: Menampilkan entri arsip yang dicatat manual (di luar alur pengajuan warga). Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum: [masuk, keluar]
+          description: Filter berdasarkan arah surat
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Cari pada nomor surat, pihak, atau perihal
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter tanggal surat mulai (>=)
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter tanggal surat akhir (<=)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Daftar arsip surat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArsipSurat'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan staff/admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Arsip]
+      summary: Tambah arsip surat (surat masuk/keluar)
+      description: Mencatat surat masuk atau keluar eksternal beserta lampiran opsional (JPEG/PNG/PDF, maks 5MB). Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [direction, nomor_surat, tanggal_surat, pihak, perihal]
+              properties:
+                direction:
+                  type: string
+                  enum: [masuk, keluar]
+                nomor_surat:
+                  type: string
+                  example: '005/UND/V/2026'
+                tanggal_surat:
+                  type: string
+                  format: date
+                  example: '2026-05-20'
+                tanggal_diterima:
+                  type: string
+                  format: date
+                  description: Hanya untuk surat masuk
+                  example: '2026-05-21'
+                pihak:
+                  type: string
+                  description: Pengirim (masuk) atau tujuan (keluar)
+                  example: 'Kecamatan Tomohon Tengah'
+                perihal:
+                  type: string
+                  example: 'Undangan rapat koordinasi'
+                sifat:
+                  type: string
+                  enum: [biasa, penting, segera, rahasia]
+                  default: biasa
+                keterangan:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+                  description: Lampiran hasil scan (opsional)
+      responses:
+        '201':
+          description: Arsip surat berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ArsipSurat'
+        '400':
+          description: Validasi gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan staff/admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /arsip/log:
+    get:
+      tags: [Arsip]
+      summary: Log arsip terpadu (manual + surat terbit sistem)
+      description: Gabungan entri arsip manual dan surat yang diterbitkan sistem (IssuedLetter, dianggap surat keluar), dibaca saat query. Diurutkan tanggal surat menurun. Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum: [masuk, keluar]
+          description: 'Filter arah. masuk hanya entri manual; keluar/kosong menyertakan surat sistem'
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Log arsip terpadu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArsipLogEntry'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan staff/admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /arsip/{id}:
+    get:
+      tags: [Arsip]
+      summary: Detail arsip surat
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detail arsip surat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ArsipSurat'
+        '404':
+          description: Arsip surat tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags: [Arsip]
+      summary: Perbarui arsip surat
+      description: Memperbarui sebagian field arsip surat. Mengirim lampiran baru akan mengganti yang lama. Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                direction:
+                  type: string
+                  enum: [masuk, keluar]
+                nomor_surat:
+                  type: string
+                tanggal_surat:
+                  type: string
+                  format: date
+                tanggal_diterima:
+                  type: string
+                  format: date
+                pihak:
+                  type: string
+                perihal:
+                  type: string
+                sifat:
+                  type: string
+                  enum: [biasa, penting, segera, rahasia]
+                keterangan:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Arsip surat berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ArsipSurat'
+        '404':
+          description: Arsip surat tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Arsip]
+      summary: Hapus arsip surat
+      description: Menghapus entri arsip beserta lampirannya. Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Arsip surat berhasil dihapus
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Arsip surat berhasil dihapus'
+        '404':
+          description: Arsip surat tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /arsip/{id}/file:
+    get:
+      tags: [Arsip]
+      summary: Unduh/lihat lampiran arsip surat
+      description: Mengembalikan file lampiran. Tambahkan ?download=true untuk mengunduh sebagai attachment. Hanya staff & admin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: download
+          schema:
+            type: boolean
+          description: Jika true, file diunduh sebagai attachment
+      responses:
+        '200':
+          description: File lampiran
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Arsip atau lampiran tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ==================== DASHBOARD ROUTES ====================
+  /dashboard/overview:
+    get:
+      tags: [Dashboard]
+      summary: Statistik agregat home dashboard
+      description: Mengembalikan KPI cards, distribusi pengajuan (status/jenis/lingkungan), tren bulanan (6 bulan), dan pengajuan terbaru. Hanya admin & staff.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Statistik dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DashboardOverview'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Bukan admin/staff
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1811,3 +2216,189 @@ components:
           type: string
           description: Pesan error detail
           example: 'Data tidak valid'
+
+    ArsipSurat:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '1'
+        direction:
+          type: string
+          enum: [masuk, keluar]
+        nomor_surat:
+          type: string
+          example: '005/UND/V/2026'
+        tanggal_surat:
+          type: string
+          format: date
+        tanggal_diterima:
+          type: string
+          format: date
+          nullable: true
+        pihak:
+          type: string
+          example: 'Kecamatan Tomohon Tengah'
+        perihal:
+          type: string
+          example: 'Undangan rapat koordinasi'
+        sifat:
+          type: string
+          enum: [biasa, penting, segera, rahasia]
+        keterangan:
+          type: string
+          nullable: true
+        file_url:
+          type: string
+          nullable: true
+          description: URL lampiran (null jika tidak ada)
+        download_url:
+          type: string
+          nullable: true
+        file_type:
+          type: string
+          nullable: true
+        created_by:
+          type: object
+          properties:
+            id:
+              type: string
+            nama:
+              type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ArsipLogEntry:
+      type: object
+      description: Entri log arsip terpadu (manual atau surat terbit sistem)
+      properties:
+        source:
+          type: string
+          enum: [manual, system]
+          description: 'manual = dicatat di luar sistem; system = surat terbit IssuedLetter'
+        id:
+          type: string
+        direction:
+          type: string
+          enum: [masuk, keluar]
+        nomor_surat:
+          type: string
+        tanggal_surat:
+          type: string
+          format: date-time
+        tanggal_diterima:
+          type: string
+          format: date
+          nullable: true
+        pihak:
+          type: string
+        perihal:
+          type: string
+        sifat:
+          type: string
+          nullable: true
+        keterangan:
+          type: string
+          nullable: true
+        file_url:
+          type: string
+          nullable: true
+        verification_code:
+          type: string
+          nullable: true
+          description: Hanya untuk source=system
+        is_revoked:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    DashboardOverview:
+      type: object
+      properties:
+        cards:
+          type: object
+          properties:
+            total_submissions:
+              type: integer
+            pending_submissions:
+              type: integer
+            issued_letters:
+              type: integer
+            issued_this_month:
+              type: integer
+            revoked_letters:
+              type: integer
+            total_penduduk:
+              type: integer
+            arsip_masuk:
+              type: integer
+            arsip_keluar:
+              type: integer
+        submissions_by_status:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+                example: pending_kepling
+              count:
+                type: integer
+        submissions_by_type:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: domisili
+              count:
+                type: integer
+        submissions_by_lingkungan:
+          type: array
+          items:
+            type: object
+            properties:
+              lingkungan_id:
+                type: string
+              nama:
+                type: string
+              count:
+                type: integer
+        monthly_trend:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                example: '2026-06'
+              submissions:
+                type: integer
+              issued:
+                type: integer
+        recent_submissions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+              status:
+                type: string
+              nama:
+                type: string
+                nullable: true
+              lingkungan:
+                type: string
+                nullable: true
+              created_at:
+                type: string
+                format: date-time

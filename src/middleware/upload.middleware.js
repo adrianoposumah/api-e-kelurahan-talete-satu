@@ -12,8 +12,8 @@ const PROJECT_ROOT = join(__dirname, '..', '..');
 const UPLOADS_ROOT = join(PROJECT_ROOT, 'uploads');
 const TEMP_UPLOADS_ROOT = join(UPLOADS_ROOT, '_tmp');
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
+export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+export const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 
 const ensureDir = (dirPath) => {
   if (!existsSync(dirPath)) {

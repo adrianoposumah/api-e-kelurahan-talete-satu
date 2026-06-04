@@ -17,6 +17,8 @@ import letterRoutes from './routes/letter.routes.js';
 import keyRoutes from './routes/key.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import arsipRoutes from './routes/arsip.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
 import env from './config/env.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -85,6 +87,8 @@ app.use('/v1/keys', keyRoutes);
 app.use('/v1/verify', verificationRoutes);
 app.use('/verify', verificationRoutes);
 app.use('/v1/notifications', notificationRoutes);
+app.use('/v1/arsip', arsipRoutes);
+app.use('/v1/dashboard', dashboardRoutes);
 
 if (process.env.NODE_ENV !== 'production') {
   app.get('/debug-sentry', function mainHandler(_req, _res) {

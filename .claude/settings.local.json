@@ -3,6 +3,9 @@
     "allow": [
       "Bash(node --input-type=module -e ' *)",
       "Bash(npm run *)"
+    ],
+    "additionalDirectories": [
+      "D:\\Projects"
     ]
   }
 }
