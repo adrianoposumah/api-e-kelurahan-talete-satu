@@ -1,5 +1,10 @@
 {
   "name": "api-e-kelurahan-talete-satu",
+  "licenses": [
+    {
+      "type": "MIT"
+    }
+  ],
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
