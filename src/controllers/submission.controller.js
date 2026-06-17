@@ -521,6 +521,30 @@ class SubmissionController {
     }
   }
 
+  // ==================== COUNT ACTIONS ====================
+
+  async getActiveCountForKepling(req, res, next) {
+    try {
+      const keplingUserId = req.user.userId;
+      const count = await submissionService.getActiveSubmissionCountForKepling({ keplingUserId });
+      res.json({ count });
+    } catch (error) {
+      if (error.code === 'FORBIDDEN') {
+        return res.status(403).json({ error: 'Forbidden', message: error.message });
+      }
+      next(error);
+    }
+  }
+
+  async getActiveCountForLurah(req, res, next) {
+    try {
+      const count = await submissionService.getActiveSubmissionCountForLurah();
+      res.json({ count });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ==================== ADMIN ACTIONS ====================
 
   /**

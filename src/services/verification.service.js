@@ -62,13 +62,19 @@ class VerificationService {
   }
 
   trimPaddedSignatureHex(contentsHex) {
-    let trimmed = String(contentsHex || '').replace(/[^0-9a-f]/gi, '').replace(/0+$/g, '');
+    let trimmed = String(contentsHex || '')
+      .replace(/[^0-9a-f]/gi, '')
+      .replace(/0+$/g, '');
     if (trimmed.length % 2 !== 0) trimmed += '0';
     return trimmed;
   }
 
   matchVerificationCode(payload) {
-    return String(payload || '').match(/[A-F0-9]{8}-\d{3}/i)?.[0]?.toUpperCase() || null;
+    return (
+      String(payload || '')
+        .match(/[A-F0-9]{8}-\d{3}/i)?.[0]
+        ?.toUpperCase() || null
+    );
   }
 
   /**
@@ -142,7 +148,7 @@ class VerificationService {
     return { pass: true, status: 'pass', reason: 'Letter found in records', issuedLetter, checks };
   }
 
-  async runCryptoCheck(pdfBuffer, issuedLetter) {
+  async runSignatureCheck(pdfBuffer, issuedLetter) {
     const checks = {
       contentIntegrity: { pass: null, detail: null },
       signature: { pass: null, detail: null },
@@ -273,7 +279,7 @@ class VerificationService {
     };
 
     const cryptoResult = this.hasPadesSignature(pdfBuffer)
-      ? await this.runCryptoCheck(pdfBuffer, serverResult.issuedLetter)
+      ? await this.runSignatureCheck(pdfBuffer, serverResult.issuedLetter)
       : {
           pass: false,
           status: 'missing_pades',
@@ -303,7 +309,7 @@ class VerificationService {
         codeSource,
         checks: serverResult.checks,
       },
-      cryptoCheck: {
+      signatureCheck: {
         pass: cryptoResult.pass,
         status: cryptoResult.status,
         reason: cryptoResult.reason,

@@ -5,35 +5,31 @@ import verificationService from '../services/verification.service.js';
  */
 class VerificationController {
   /**
-   * Build an absolute public URL from the current request.
-   * @param {object} req - Express request
-   * @param {string} publicPath - Public path beginning with /
-   * @returns {string} Absolute URL
+   * GET /verify/:verificationCode
    */
-  buildPublicUrl(req, publicPath) {
-    const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
-    const protocol = forwardedProto || req.protocol;
-    return `${protocol}://${req.get('host')}${publicPath}`;
-  }
+  async verifyByCode(req, res, next) {
+    try {
+      const verificationCode = req.params?.verificationCode || req.query?.verificationCode || req.query?.verification_code;
 
-  /**
-   * Add browser-displayable PDF URL to a verification result.
-   * @param {object} req - Express request
-   * @param {object} result - Verification result
-   * @returns {object} Verification result with PDF URL
-   */
-  withPdfUrl(req, result) {
-    if (!result.pdf?.path) {
-      return result;
+      if (!verificationCode) {
+        return res.status(400).json({ success: false, message: 'verificationCode is required' });
+      }
+
+      const { serverCheck, signatureCheck, ...result } = await verificationService.verifyLetterByCode(verificationCode);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...result,
+          serverCheck: { pass: serverCheck.pass, status: serverCheck.status, reason: serverCheck.reason },
+          signatureCheck: { pass: signatureCheck.pass, status: signatureCheck.status, reason: signatureCheck.reason, signerCommonName: signatureCheck.signerCommonName, keyStatus: signatureCheck.keyStatus },
+        },
+      });
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') return res.status(404).json({ success: false, message: error.message });
+      if (error.code === 'BAD_REQUEST') return res.status(400).json({ success: false, message: error.message });
+      next(error);
     }
-
-    return {
-      ...result,
-      pdf: {
-        ...result.pdf,
-        url: this.buildPublicUrl(req, result.pdf.path),
-      },
-    };
   }
 
   /**
@@ -59,45 +55,7 @@ class VerificationController {
     }
   }
 
-  /**
-   * POST /verify/code - Verify a stored PDF by verificationCode
-   * GET /verify/code/:verificationCode - Verify a stored PDF by verificationCode
-   */
-  async verifyByCode(req, res, next) {
-    try {
-      const verificationCode = req.body?.verificationCode || req.body?.verification_code || req.params?.verificationCode || req.query?.verificationCode || req.query?.verification_code;
 
-      if (!verificationCode) {
-        return res.status(400).json({
-          success: false,
-          message: 'verificationCode is required',
-        });
-      }
-
-      const result = await verificationService.verifyLetterByCode(verificationCode);
-
-      return res.status(200).json({
-        success: true,
-        data: this.withPdfUrl(req, result),
-      });
-    } catch (error) {
-      if (error.code === 'NOT_FOUND') {
-        return res.status(404).json({
-          success: false,
-          message: error.message,
-        });
-      }
-
-      if (error.code === 'BAD_REQUEST') {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
-      }
-
-      next(error);
-    }
-  }
 }
 
 export default new VerificationController();

@@ -27,6 +27,9 @@ router.delete('/:id', requireRole('warga'), submissionController.deleteSubmissio
 
 // ==================== KEPLING ROUTES ====================
 
+// GET /submissions/kepling/count - Get active submission count needing kepling action
+router.get('/kepling/count', requireRole('kepling'), submissionController.getActiveCountForKepling.bind(submissionController));
+
 // GET /submissions/kepling/list - Get submissions for kepling's lingkungan
 router.get('/kepling/list', requireRole('kepling'), submissionController.getSubmissionsForKepling.bind(submissionController));
 
@@ -43,6 +46,9 @@ router.post('/:id/kepling/approve', requireRole('kepling'), submissionController
 router.post('/:id/kepling/reject', requireRole('kepling'), submissionController.rejectByKepling.bind(submissionController));
 
 // ==================== LURAH ROUTES ====================
+
+// GET /submissions/lurah/count - Get active submission count needing lurah action
+router.get('/lurah/count', requireRole('lurah', 'sekertaris'), submissionController.getActiveCountForLurah.bind(submissionController));
 
 // GET /submissions/lurah/list - Get all submissions for lurah
 router.get('/lurah/list', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionsForLurah.bind(submissionController));

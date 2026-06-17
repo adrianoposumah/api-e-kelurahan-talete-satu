@@ -1117,6 +1117,34 @@ class SubmissionService {
 
     return true;
   }
+
+  async getActiveSubmissionCountForKepling({ keplingUserId }) {
+    const keplingAssignments = await prisma.lingkunganKepling.findMany({
+      where: { userId: BigInt(keplingUserId), selesai: null },
+    });
+
+    if (keplingAssignments.length === 0) {
+      const error = new Error('Kepling tidak memiliki lingkungan yang ditugaskan');
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const lingkunganIds = keplingAssignments.map((a) => a.lingkunganId);
+
+    const count = await prisma.submission.count({
+      where: { lingkunganId: { in: lingkunganIds }, status: 'pending_kepling' },
+    });
+
+    return count;
+  }
+
+  async getActiveSubmissionCountForLurah() {
+    const count = await prisma.submission.count({
+      where: { status: 'pending_lurah' },
+    });
+
+    return count;
+  }
 }
 
 export default new SubmissionService();
