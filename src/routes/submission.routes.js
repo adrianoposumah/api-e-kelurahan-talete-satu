@@ -59,17 +59,6 @@ router.get('/lurah/history', requireRole('lurah', 'sekertaris'), submissionContr
 // GET /submissions/lurah/:id - Get submission detail by ID for lurah
 router.get('/lurah/:id', requireRole('lurah', 'sekertaris'), submissionController.getSubmissionLurahDetailById.bind(submissionController));
 
-// ==================== ADMIN ROUTES ====================
-
-// GET /submissions/admin/list - Get all submissions for admin monitoring
-router.get('/admin/list', requireRole('admin'), submissionController.getSubmissionsForAdmin.bind(submissionController));
-
-// GET /submissions/admin/:id - Get submission detail by ID for admin monitoring
-router.get('/admin/:id', requireRole('admin'), submissionController.getSubmissionAdminDetailById.bind(submissionController));
-
-// GET /submissions/:id - Get submission by ID (owner, kepling of lingkungan, lurah, admin)
-router.get('/:id', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), submissionController.getSubmissionById.bind(submissionController));
-
 // POST /submissions/:id/lurah/prepare-signing - Prepare PAdES signing session
 router.post('/:id/lurah/prepare-signing', requireRole('lurah'), submissionController.prepareSigning.bind(submissionController));
 
@@ -81,5 +70,16 @@ router.post('/:id/lurah/approve', requireRole('lurah', 'sekertaris'), submission
 
 // POST /submissions/:id/lurah/reject - Reject by lurah
 router.post('/:id/lurah/reject', requireRole('lurah', 'sekertaris'), submissionController.rejectByLurah.bind(submissionController));
+
+// ==================== ADMIN ROUTES ====================
+
+// GET /submissions/admin/list - Get all submissions for admin monitoring
+router.get('/admin/list', requireRole('admin'), submissionController.getSubmissionsForAdmin.bind(submissionController));
+
+// GET /submissions/admin/:id - Get submission detail by ID for admin monitoring
+router.get('/admin/:id', requireRole('admin'), submissionController.getSubmissionAdminDetailById.bind(submissionController));
+
+// GET /submissions/:id - Get submission by ID (owner, kepling of lingkungan, lurah, admin)
+router.get('/:id', requireRole('warga', 'kepling', 'lurah', 'sekertaris', 'admin'), submissionController.getSubmissionById.bind(submissionController));
 
 export default router;

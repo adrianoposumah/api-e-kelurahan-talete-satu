@@ -116,11 +116,10 @@ class SubmissionService {
       throw error;
     }
 
-    // Verify lingkungan has an active kepling
     const activeKepling = await prisma.lingkunganKepling.findFirst({
       where: {
         lingkunganId: lingkunganId,
-        selesai: null, // Active assignment
+        selesai: null,
       },
     });
 
@@ -136,7 +135,6 @@ class SubmissionService {
       description: null,
     }));
 
-    // Create submission with status pending_kepling and uploaded documents
     const submission = await prisma.submission.create({
       data: {
         userId: BigInt(userId),
