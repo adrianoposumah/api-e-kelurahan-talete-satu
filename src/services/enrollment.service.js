@@ -54,7 +54,7 @@ class EnrollmentService {
   }
 
   async issueEnrollmentToken(lurahUserId, { allowExistingActiveKey = false, requireExistingActiveKey = false, purpose = 'ENROLLMENT' } = {}) {
-    await this.getActiveLurahProfile(lurahUserId);
+    const profile = await this.getActiveLurahProfile(lurahUserId);
     const existing = await this.getActiveCertificateKey(lurahUserId);
     if (requireExistingActiveKey && !existing) {
       throw createError('ENROLLMENT_REQUIRED', 'Lurah belum memiliki sertifikat aktif untuk dirotasi');
@@ -78,7 +78,7 @@ class EnrollmentService {
     return {
       enrollmentToken: token,
       expiresAt,
-      subjectTemplate: caService.getSubjectTemplate(),
+      subjectTemplate: caService.getSubjectTemplate(profile),
     };
   }
 
@@ -108,7 +108,7 @@ class EnrollmentService {
     }
 
     const tokenEntry = this.validateToken(lurahUserId, enrollmentToken, { purpose: 'ENROLLMENT' });
-    const signed = caService.signCsr(csrPem);
+    const signed = caService.signCsr(csrPem, profile);
 
     const keyRecord = await prisma.$transaction(async (tx) => {
       await tx.lurahKey.updateMany({
@@ -162,7 +162,7 @@ class EnrollmentService {
     }
 
     const tokenEntry = this.validateToken(lurahUserId, enrollmentToken, { purpose: 'ROTATION' });
-    const signed = caService.signCsr(csrPem);
+    const signed = caService.signCsr(csrPem, profile);
     const rotatedAt = new Date();
 
     const keyRecord = await prisma.$transaction(async (tx) => {

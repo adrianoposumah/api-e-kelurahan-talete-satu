@@ -13,6 +13,7 @@ const ROOT_CA_SUBJECT = {
 
 const ROOT_CA_VALIDITY_YEARS = 10;
 const LURAH_CERT_VALIDITY_YEARS = 3;
+const DEFAULT_LURAH_COMMON_NAME = 'Lurah Talete Satu';
 
 let cachedRootCa = null;
 
@@ -40,6 +41,10 @@ function computeCertFingerprint(certificatePem) {
   return crypto.createHash('sha256').update(Buffer.from(der, 'binary')).digest('hex');
 }
 
+function resolveLurahCommonName(lurahProfile) {
+  return lurahProfile?.namaLengkap?.trim() || DEFAULT_LURAH_COMMON_NAME;
+}
+
 function validateSubjectMatch(csrAttrs, expected) {
   const findValue = (name) => csrAttrs.find((attr) => attr.name === name || attr.shortName === name)?.value || null;
   const checks = [
@@ -60,17 +65,17 @@ function validateSubjectMatch(csrAttrs, expected) {
 }
 
 class CaService {
-  getSubjectTemplate() {
+  getSubjectTemplate(lurahProfile = null) {
     return {
-      commonName: 'Lurah Talete Satu',
+      commonName: resolveLurahCommonName(lurahProfile),
       organization: 'Kelurahan Talete Satu',
       organizationalUnit: 'Pemerintah Kota Tomohon',
       country: 'ID',
     };
   }
 
-  getExpectedSubject() {
-    const template = this.getSubjectTemplate();
+  getExpectedSubject(lurahProfile = null) {
+    const template = this.getSubjectTemplate(lurahProfile);
     return {
       commonName: template.commonName,
       organizationName: template.organization,
@@ -143,7 +148,7 @@ class CaService {
     return cachedRootCa;
   }
 
-  signCsr(csrPem) {
+  signCsr(csrPem, lurahProfile = null) {
     const csr = forge.pki.certificationRequestFromPem(csrPem);
     if (!csr.verify()) {
       const error = new Error('CSR signature tidak valid atau format malformed');
@@ -151,7 +156,7 @@ class CaService {
       throw error;
     }
 
-    validateSubjectMatch(csr.subject.attributes, this.getExpectedSubject());
+    validateSubjectMatch(csr.subject.attributes, this.getExpectedSubject(lurahProfile));
 
     const rootCa = this.loadRootCa();
     const issuedAt = new Date();
