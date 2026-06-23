@@ -184,6 +184,19 @@ class VerificationService {
       }
       checks.certChain = { pass: true, detail: 'Cert chain terverifikasi sampai ke Root CA Kelurahan Talete Satu' };
 
+      if (!issuedLetter) {
+        checks.signerMatch = { pass: null, detail: 'Surat tidak terdaftar; fingerprint server tidak dapat dibandingkan' };
+        checks.keyStatus = { pass: null, detail: 'Surat tidak terdaftar; status key server tidak dapat dievaluasi' };
+        checks.keyValidity = { pass: null, detail: 'Surat tidak terdaftar; masa berlaku key server tidak dapat dievaluasi' };
+        return {
+          pass: true,
+          status: 'pass',
+          reason: 'Crypto-Check valid; surat tidak ditemukan di rekaman server',
+          signerCommonName,
+          checks,
+        };
+      }
+
       if (issuedLetter?.signatureKey?.fingerprint) {
         const fingerprint = cryptoService.computeCertFingerprint(pkcs7.signerCertPem);
         if (fingerprint !== issuedLetter.signatureKey.fingerprint) {
