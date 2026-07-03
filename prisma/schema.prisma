@@ -243,6 +243,7 @@ model Submission {
   approvals     SubmissionApproval[]
   issuedLetter  IssuedLetter?
   signingSessions SigningSession[]
+  letterReservation LetterReservation?
 
   @@map("submissions")
 }
@@ -339,6 +340,12 @@ enum SigningSessionStatus {
   COMPLETED
   EXPIRED
   REJECTED
+}
+
+enum LetterReservationStatus {
+  RESERVED
+  ISSUED
+  RELEASED
 }
 
 // Lurah key pairs for digital signatures
@@ -446,6 +453,28 @@ model LetterCounter {
 
   @@id([letterType, year])
   @@map("letter_counters")
+}
+
+// Per-submission letter-number reservation.
+// Guarantees a gapless issued register: a sequence is bound to a submission at
+// prepare-signing time (idempotent), marked ISSUED on signing, or RELEASED back
+// into a free-list if the submission is rejected so the next allocation can reuse it.
+model LetterReservation {
+  id               BigInt                  @id @default(autoincrement()) @db.BigInt
+  year             Int
+  sequence         Int
+  letterNumber     String                  @map("letter_number") @db.VarChar(100)
+  verificationCode String                  @map("verification_code") @db.VarChar(50)
+  status           LetterReservationStatus @default(RESERVED)
+  submissionId     BigInt?                 @unique @map("submission_id") @db.BigInt
+  reservedAt       DateTime                @default(now()) @map("reserved_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  submission       Submission?             @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@unique([year, sequence])
+  @@index([status, year, sequence])
+  @@map("letter_reservations")
 }
 
 // Verification attempt audit log

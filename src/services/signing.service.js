@@ -89,7 +89,41 @@ class SigningService {
   async prepareSigning({ submissionId, lurahUserId }) {
     const submission = await this.loadSubmissionForSigning(submissionId);
     const { profile, keyRecord } = await this.getActiveCertificateKey(lurahUserId);
-    const { verificationCode, letterNumber } = await letterService.generateLetterIdentity(submission.type);
+
+    // Reuse a still-valid PENDING session for this submission instead of re-rendering.
+    // Prevents duplicate drafts on a rapid double-press or re-entry within the TTL window.
+    const existingSession = await prisma.signingSession.findFirst({
+      where: { submissionId: submission.id, status: 'PENDING', expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existingSession) {
+      const existingDraftPath = resolveProjectPath(existingSession.pdfDraftPath);
+      if (existsSync(existingDraftPath)) {
+        const existingSchema = await templateService.getSchema(submission.type);
+        const existingLetterExpiresAt = existingSchema.validityDays
+          ? new Date(existingSession.issuedDate.getTime() + existingSchema.validityDays * 24 * 60 * 60 * 1000)
+          : null;
+        const existingPdfBytes = await readFile(existingDraftPath);
+        return {
+          sessionId: existingSession.id.toString(),
+          expiresAt: existingSession.expiresAt,
+          pdfBase64: existingPdfBytes.toString('base64'),
+          bytesToSignBase64: existingSession.bytesToSignBase64,
+          preview: {
+            letterNumber: existingSession.letterNumber,
+            verificationCode: existingSession.verificationCode,
+            issuedDate: existingSession.issuedDate.toISOString(),
+            expiresAt: existingLetterExpiresAt?.toISOString() || null,
+          },
+        };
+      }
+    }
+
+    // Reserve (or idempotently reuse) this submission's gapless letter number.
+    const { verificationCode, letterNumber } = await letterService.reserveLetterIdentity({
+      type: submission.type,
+      submissionId: submission.id,
+    });
     const schema = await templateService.getSchema(submission.type);
     const issuedDate = new Date();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -239,6 +273,9 @@ class SigningService {
         where: { id: session.id },
         data: { status: 'COMPLETED', completedAt: signedAt },
       });
+
+      // The reserved number is now permanently used — take it out of the pool.
+      await letterService.markReservationIssued({ submissionId }, tx);
 
       return issuedLetter;
     });

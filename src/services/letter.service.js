@@ -41,7 +41,6 @@ class LetterService {
   async generateLetterIdentity(_type) {
     const now = new Date();
     const year = now.getFullYear();
-    const month = now.getMonth() + 1;
     const counterType = typeof _type === 'string' ? _type.trim() : '';
     const schema = await templateService.getSchema(counterType);
     const letterPrefix = typeof schema.letterPrefix === 'string' ? schema.letterPrefix.trim() : '';
@@ -77,12 +76,153 @@ class LetterService {
     });
 
     const sequence = Number(rows?.[0]?.sequence || 1);
+    return this.buildLetterIdentity(sequence, letterPrefix, now);
+  }
+
+  /**
+   * Materialize a letter number + verification code from a sequence value.
+   * The sequence is the gapless unit; the surrounding string (kelurahan code,
+   * type prefix, roman month, year) and the random verification prefix are
+   * derived here so a recycled sequence can pick up a new type/month context.
+   * @param {number} sequence - Global letter sequence
+   * @param {string} letterPrefix - Per-type prefix from the template schema
+   * @param {Date} now - Reference date for month/year
+   * @returns {{ verificationCode: string, letterNumber: string }}
+   */
+  buildLetterIdentity(sequence, letterPrefix, now = new Date()) {
     const seq = String(sequence).padStart(3, '0');
     const verificationCode = `${this.generateVerificationPrefix()}-${seq}`;
     const kelurahanCode = env.KELURAHAN_CODE || '2009';
-    const letterNumber = `${verificationCode}/${kelurahanCode}/${letterPrefix}/${this.getRomanMonth(month)}/${year}`;
-
+    const month = now.getMonth() + 1;
+    const letterNumber = `${verificationCode}/${kelurahanCode}/${letterPrefix}/${this.getRomanMonth(month)}/${now.getFullYear()}`;
     return { verificationCode, letterNumber };
+  }
+
+  /**
+   * Reserve a gapless letter identity bound to a submission.
+   *
+   * Guarantees the issued register has no skipped numbers:
+   *  1. Idempotent — if the submission already holds a RESERVED slot, its stored
+   *     number is returned unchanged (so re-pressing "Setujui & Tandatangani" or
+   *     re-preparing after a session expiry never consumes a new number).
+   *  2. Reclaim — otherwise the lowest RELEASED slot for the year is recycled
+   *     (its sequence is kept, the string/verification code are regenerated for
+   *     this submission's type and current month).
+   *  3. Fresh — otherwise the global counter is bumped and a new slot created.
+   *
+   * @param {object} args
+   * @param {string} args.type - Letter/submission type
+   * @param {string|BigInt} args.submissionId - Owning submission id
+   * @returns {Promise<{ sequence: number, letterNumber: string, verificationCode: string }>}
+   */
+  async reserveLetterIdentity({ type, submissionId }) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const counterType = typeof type === 'string' ? type.trim() : '';
+    const schema = await templateService.getSchema(counterType);
+    const letterPrefix = typeof schema.letterPrefix === 'string' ? schema.letterPrefix.trim() : '';
+
+    if (!letterPrefix) {
+      const error = new Error(`Letter prefix untuk tipe '${counterType}' belum dikonfigurasi`);
+      error.code = 'BAD_REQUEST';
+      throw error;
+    }
+
+    const submissionBigInt = BigInt(submissionId);
+
+    return prisma.$transaction(async (tx) => {
+      // 1. Idempotent — reuse this submission's existing reservation verbatim.
+      const existing = await tx.letterReservation.findFirst({
+        where: { submissionId: submissionBigInt, status: 'RESERVED' },
+      });
+      if (existing) {
+        return {
+          sequence: existing.sequence,
+          letterNumber: existing.letterNumber,
+          verificationCode: existing.verificationCode,
+        };
+      }
+
+      // 2. Reclaim — recycle the lowest freed slot for the year, if any.
+      const freed = await tx.$queryRaw`
+        SELECT id, sequence
+        FROM letter_reservations
+        WHERE status = 'RELEASED' AND year = ${year}
+        ORDER BY sequence ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      `;
+      if (freed && freed.length > 0) {
+        const sequence = Number(freed[0].sequence);
+        const { verificationCode, letterNumber } = this.buildLetterIdentity(sequence, letterPrefix, now);
+        await tx.letterReservation.update({
+          where: { id: freed[0].id },
+          data: { status: 'RESERVED', submissionId: submissionBigInt, letterNumber, verificationCode },
+        });
+        return { sequence, letterNumber, verificationCode };
+      }
+
+      // 3. Fresh — bump the global counter (and per-type counter for reporting).
+      const globalRows = await tx.$queryRaw`
+        INSERT INTO letter_counters (letter_type, year, sequence)
+        VALUES (${GLOBAL_LETTER_COUNTER_TYPE}, ${year}, 1)
+        ON CONFLICT (letter_type, year)
+        DO UPDATE SET sequence = letter_counters.sequence + 1
+        RETURNING sequence
+      `;
+
+      if (counterType && counterType !== GLOBAL_LETTER_COUNTER_TYPE) {
+        await tx.$queryRaw`
+          INSERT INTO letter_counters (letter_type, year, sequence)
+          VALUES (${counterType}, ${year}, 1)
+          ON CONFLICT (letter_type, year)
+          DO UPDATE SET sequence = letter_counters.sequence + 1
+          RETURNING sequence
+        `;
+      }
+
+      const sequence = Number(globalRows?.[0]?.sequence || 1);
+      const { verificationCode, letterNumber } = this.buildLetterIdentity(sequence, letterPrefix, now);
+      await tx.letterReservation.create({
+        data: {
+          year,
+          sequence,
+          letterNumber,
+          verificationCode,
+          status: 'RESERVED',
+          submissionId: submissionBigInt,
+        },
+      });
+      return { sequence, letterNumber, verificationCode };
+    });
+  }
+
+  /**
+   * Mark a submission's reservation as permanently used (called inside the
+   * issuance transaction). No-op if the submission has no active reservation.
+   * @param {object} args
+   * @param {string|BigInt} args.submissionId
+   * @param {object} [tx=prisma] - Prisma client or transaction client
+   */
+  async markReservationIssued({ submissionId }, tx = prisma) {
+    return tx.letterReservation.updateMany({
+      where: { submissionId: BigInt(submissionId), status: 'RESERVED' },
+      data: { status: 'ISSUED' },
+    });
+  }
+
+  /**
+   * Return a submission's reserved number to the free-list (called when a
+   * previewed submission is rejected). No-op if it never reserved a number.
+   * @param {object} args
+   * @param {string|BigInt} args.submissionId
+   * @param {object} [tx=prisma] - Prisma client or transaction client
+   */
+  async releaseReservation({ submissionId }, tx = prisma) {
+    return tx.letterReservation.updateMany({
+      where: { submissionId: BigInt(submissionId), status: 'RESERVED' },
+      data: { status: 'RELEASED', submissionId: null },
+    });
   }
 
   /**

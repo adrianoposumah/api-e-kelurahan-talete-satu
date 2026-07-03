@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import { sendToUser } from './notification.service.js';
+import letterService from './letter.service.js';
 
 const parseBigIntFilter = (value, fieldName) => {
   try {
@@ -1035,6 +1036,9 @@ class SubmissionService {
           note: note || reason,
         },
       });
+
+      // Return any number reserved during preview back to the pool so it can be reused.
+      await letterService.releaseReservation({ submissionId }, tx);
 
       // Update submission status
       const updatedSubmission = await tx.submission.update({
